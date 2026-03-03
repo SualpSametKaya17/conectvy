@@ -24,22 +24,25 @@ export async function GET(request: Request) {
       req.query(`
         SELECT
           c.id, c.name, c.description, c.is_active AS isActive,
+          c.maintenance_start_date AS maintenanceStartDate,
+          c.maintenance_end_date   AS maintenanceEndDate,
           c.created_at AS createdAt, c.updated_at AS updatedAt,
-          (SELECT COUNT(*) FROM connections cn WHERE cn.company_id = c.id) AS connectionCount,
-          (SELECT COUNT(*) FROM regions     r  WHERE r.company_id  = c.id) AS regionCount
+          (SELECT COUNT(*) FROM connections cn WHERE cn.company_id = c.id AND cn.is_active = 1) AS connectionCount,
+          (SELECT COUNT(*) FROM regions     r  WHERE r.company_id  = c.id) AS regionCount,
+          (SELECT COUNT(*) FROM computers   co WHERE co.company_id = c.id AND co.is_active = 1) AS computerCount
         FROM companies c
-        WHERE c.name LIKE @search
+        WHERE c.name LIKE @search AND c.is_active = 1
         ORDER BY c.name
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
       `),
       pool.request()
         .input("search", sql.NVarChar, search ? `%${search}%` : "%")
-        .query(`SELECT COUNT(*) AS total FROM companies WHERE name LIKE @search`),
+        .query(`SELECT COUNT(*) AS total FROM companies WHERE name LIKE @search AND is_active = 1`),
     ]);
 
     const formatted = items.recordset.map((r) => ({
       ...r,
-      _count: { connections: r.connectionCount, regions: r.regionCount },
+      _count: { connections: r.connectionCount, regions: r.regionCount, computers: r.computerCount },
     }));
 
     return apiSuccess({ items: formatted, total: count.recordset[0].total, page, pageSize });
@@ -58,24 +61,28 @@ export async function POST(request: Request) {
     const parsed = CreateCompanySchema.safeParse(body);
     if (!parsed.success) return apiValidationError(parsed.error);
 
-    const { name, description } = parsed.data;
+    const { name, description, maintenanceStartDate, maintenanceEndDate } = parsed.data;
     const pool = await getPool();
 
     // Uniqueness check
     const exists = await pool.request()
       .input("name", sql.NVarChar, name)
-      .query("SELECT id FROM companies WHERE name = @name");
+      .query("SELECT id FROM companies WHERE name = @name AND is_active = 1");
     if (exists.recordset.length > 0) return apiError("Bu firma adı zaten kayıtlı", 409);
 
     const result = await pool.request()
-      .input("name",        sql.NVarChar, name)
-      .input("description", sql.NVarChar, description || null)
+      .input("name",                 sql.NVarChar, name)
+      .input("description",          sql.NVarChar, description || null)
+      .input("maintenanceStartDate", sql.Date,     maintenanceStartDate || null)
+      .input("maintenanceEndDate",   sql.Date,     maintenanceEndDate   || null)
       .query(`
-        INSERT INTO companies (name, description)
+        INSERT INTO companies (name, description, maintenance_start_date, maintenance_end_date)
         OUTPUT INSERTED.id, INSERTED.name, INSERTED.description,
                INSERTED.is_active AS isActive,
+               INSERTED.maintenance_start_date AS maintenanceStartDate,
+               INSERTED.maintenance_end_date   AS maintenanceEndDate,
                INSERTED.created_at AS createdAt, INSERTED.updated_at AS updatedAt
-        VALUES (@name, @description)
+        VALUES (@name, @description, @maintenanceStartDate, @maintenanceEndDate)
       `);
 
     return apiSuccess(result.recordset[0], 201);

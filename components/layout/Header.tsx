@@ -8,6 +8,7 @@ const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/connections": "Bağlantılar",
   "/companies": "Firmalar",
+  "/computers": "Bilgisayarlar",
   "/regions": "Bölgeler",
   "/settings": "Ayarlar",
 };

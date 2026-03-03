@@ -1,0 +1,91 @@
+import { getPool, sql } from "@/lib/db";
+import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
+import { UpdateComputerSchema, ComputerIdSchema } from "@/lib/validations/computer";
+
+function parseId(params: { id: string }) {
+  return ComputerIdSchema.safeParse(params);
+}
+
+/** GET /api/computers/:id */
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const parsed = parseId(params);
+  if (!parsed.success) return apiValidationError(parsed.error);
+
+  const pool   = await getPool();
+  const result = await pool.request()
+    .input("id", sql.Int, parsed.data.id)
+    .query(`
+      SELECT co.id, co.company_id AS companyId, comp.name AS companyName,
+             co.name, co.description, co.is_active AS isActive,
+             co.created_at AS createdAt, co.updated_at AS updatedAt,
+             (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1) AS connectionCount
+      FROM computers co
+      JOIN companies comp ON comp.id = co.company_id
+      WHERE co.id = @id AND co.is_active = 1
+    `);
+
+  const row = result.recordset[0];
+  if (!row) return apiError("Bilgisayar bulunamadı", 404);
+
+  return apiSuccess({
+    ...row,
+    company: { id: row.companyId, name: row.companyName },
+  });
+}
+
+/** PATCH /api/computers/:id */
+export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  const parsed = parseId(params);
+  if (!parsed.success) return apiValidationError(parsed.error);
+
+  const body   = await request.json();
+  const update = UpdateComputerSchema.safeParse(body);
+  if (!update.success) return apiValidationError(update.error);
+
+  try {
+    const pool = await getPool();
+    const sets: string[] = [];
+    const req = pool.request().input("id", sql.Int, parsed.data.id);
+
+    if (update.data.companyId   !== undefined) { sets.push("company_id = @companyId");   req.input("companyId",   sql.Int,      update.data.companyId); }
+    if (update.data.name        !== undefined) { sets.push("name = @name");               req.input("name",        sql.NVarChar, update.data.name); }
+    if (update.data.description !== undefined) { sets.push("description = @description"); req.input("description", sql.NVarChar, update.data.description || null); }
+
+    if (sets.length === 0) return apiError("Güncellenecek alan yok", 400);
+
+    await req.query(`UPDATE computers SET ${sets.join(", ")} WHERE id = @id AND is_active = 1`);
+
+    const updated = await pool.request()
+      .input("id", sql.Int, parsed.data.id)
+      .query(`
+        SELECT co.id, co.company_id AS companyId, comp.name AS companyName,
+               co.name, co.description, co.is_active AS isActive,
+               co.created_at AS createdAt, co.updated_at AS updatedAt
+        FROM computers co
+        JOIN companies comp ON comp.id = co.company_id
+        WHERE co.id = @id
+      `);
+
+    const row = updated.recordset[0];
+    if (!row) return apiError("Bilgisayar bulunamadı", 404);
+
+    return apiSuccess({ ...row, company: { id: row.companyId, name: row.companyName } });
+  } catch (error) {
+    console.error("[PATCH /api/computers/:id]", error);
+    return apiError("Bilgisayar güncellenemedi", 500);
+  }
+}
+
+/** DELETE /api/computers/:id  (soft delete) */
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const parsed = parseId(params);
+  if (!parsed.success) return apiValidationError(parsed.error);
+
+  const pool   = await getPool();
+  const result = await pool.request()
+    .input("id", sql.Int, parsed.data.id)
+    .query("UPDATE computers SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
+
+  if (!result.recordset[0]?.affected) return apiError("Bilgisayar bulunamadı", 404);
+  return apiSuccess({ deleted: true });
+}

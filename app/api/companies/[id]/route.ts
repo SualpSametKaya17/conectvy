@@ -16,8 +16,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .input("id", sql.Int, parsed.data.id)
     .query(`
       SELECT c.id, c.name, c.description, c.is_active AS isActive,
+             c.maintenance_start_date AS maintenanceStartDate,
+             c.maintenance_end_date   AS maintenanceEndDate,
              c.created_at AS createdAt, c.updated_at AS updatedAt,
-             (SELECT COUNT(*) FROM connections cn WHERE cn.company_id = c.id) AS connectionCount
+             (SELECT COUNT(*) FROM connections cn WHERE cn.company_id = c.id AND cn.is_active = 1) AS connectionCount,
+             (SELECT COUNT(*) FROM computers   co WHERE co.company_id = c.id AND co.is_active = 1) AS computerCount
       FROM companies c
       WHERE c.id = @id
     `);
@@ -43,22 +46,42 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       const dup = await pool.request()
         .input("name", sql.NVarChar, update.data.name)
         .input("id",   sql.Int,      parsed.data.id)
-        .query("SELECT id FROM companies WHERE name = @name AND id <> @id");
+        .query("SELECT id FROM companies WHERE name = @name AND id <> @id AND is_active = 1");
       if (dup.recordset.length > 0) return apiError("Bu firma adı zaten kayıtlı", 409);
     }
 
+    const req = pool.request().input("id", sql.Int, parsed.data.id);
+    const sets: string[] = [];
+
+    if (update.data.name !== undefined) {
+      sets.push("name = @name");
+      req.input("name", sql.NVarChar, update.data.name);
+    }
+    if (update.data.description !== undefined) {
+      sets.push("description = @description");
+      req.input("description", sql.NVarChar, update.data.description || null);
+    }
+    if (update.data.maintenanceStartDate !== undefined) {
+      sets.push("maintenance_start_date = @maintenanceStartDate");
+      req.input("maintenanceStartDate", sql.Date, update.data.maintenanceStartDate || null);
+    }
+    if (update.data.maintenanceEndDate !== undefined) {
+      sets.push("maintenance_end_date = @maintenanceEndDate");
+      req.input("maintenanceEndDate", sql.Date, update.data.maintenanceEndDate || null);
+    }
+
+    if (sets.length === 0) return apiError("Güncellenecek alan yok", 400);
+
+    await req.query(`UPDATE companies SET ${sets.join(", ")} WHERE id = @id`);
+
     const result = await pool.request()
-      .input("id",          sql.Int,      parsed.data.id)
-      .input("name",        sql.NVarChar, update.data.name        ?? null)
-      .input("description", sql.NVarChar, update.data.description ?? null)
+      .input("id", sql.Int, parsed.data.id)
       .query(`
-        UPDATE companies SET
-          name        = COALESCE(@name, name),
-          description = CASE WHEN @description IS NULL AND @name IS NOT NULL THEN description ELSE COALESCE(@description, description) END
-        WHERE id = @id;
         SELECT id, name, description, is_active AS isActive,
+               maintenance_start_date AS maintenanceStartDate,
+               maintenance_end_date   AS maintenanceEndDate,
                created_at AS createdAt, updated_at AS updatedAt
-        FROM companies WHERE id = @id;
+        FROM companies WHERE id = @id
       `);
 
     if (!result.recordset[0]) return apiError("Firma bulunamadı", 404);

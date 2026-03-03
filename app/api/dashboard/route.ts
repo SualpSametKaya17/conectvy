@@ -15,12 +15,14 @@ export async function GET() {
         activeConnections: number;
         totalCompanies: number;
         totalRegions: number;
+        totalComputers: number;
       }>(`
         SELECT
           (SELECT COUNT(*) FROM connections)                          AS totalConnections,
           (SELECT COUNT(*) FROM connections WHERE is_active = 1)      AS activeConnections,
           (SELECT COUNT(*) FROM companies   WHERE is_active = 1)      AS totalCompanies,
-          (SELECT COUNT(*) FROM regions     WHERE is_active = 1)      AS totalRegions
+          (SELECT COUNT(*) FROM regions     WHERE is_active = 1)      AS totalRegions,
+          (SELECT COUNT(*) FROM computers   WHERE is_active = 1)      AS totalComputers
       `),
 
       // Son 5 bağlantı
@@ -68,6 +70,7 @@ export async function GET() {
         activeConnections: s.activeConnections,
         totalCompanies:    s.totalCompanies,
         totalRegions:      s.totalRegions,
+        totalComputers:    s.totalComputers,
       },
       recentConnections,
       toolStats,

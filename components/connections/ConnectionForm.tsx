@@ -24,18 +24,20 @@ import {
 import { CreateConnectionSchema, type CreateConnectionInput } from "@/lib/validations/connection";
 import { CONNECTION_TOOLS } from "@/lib/utils";
 
-interface Company { id: number; name: string }
-interface Region  { id: number; name: string }
+interface Company  { id: number; name: string }
+interface Region   { id: number; name: string }
+interface Computer { id: number; name: string; company: { id: number; name: string } }
 
 interface Props {
   defaultValues?: Partial<CreateConnectionInput>;
   connectionId?: number;
   companies: Company[];
   regions: Region[];
+  computers: Computer[];
   onSuccess: () => void;
 }
 
-export function ConnectionForm({ defaultValues, connectionId, companies, regions, onSuccess }: Props) {
+export function ConnectionForm({ defaultValues, connectionId, companies, regions, computers, onSuccess }: Props) {
   const form = useForm<CreateConnectionInput>({
     resolver: zodResolver(CreateConnectionSchema),
     defaultValues: {
@@ -45,6 +47,7 @@ export function ConnectionForm({ defaultValues, connectionId, companies, regions
       password: "",
       companyId: null,
       regionId: null,
+      computerId: null,
       notes: "",
       ...defaultValues,
     },
@@ -146,6 +149,36 @@ export function ConnectionForm({ defaultValues, connectionId, companies, regions
               <FormControl>
                 <Input type="password" placeholder="••••••" {...field} value={field.value ?? ""} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Computer */}
+        <FormField
+          control={form.control}
+          name="computerId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Bilgisayar</FormLabel>
+              <Select
+                onValueChange={(v) => field.onChange(v === "none" ? null : Number(v))}
+                value={field.value?.toString() ?? "none"}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Bilgisayar seç..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">— Seçilmedi —</SelectItem>
+                  {computers.map((c) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>
+                      {c.company.name} › {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

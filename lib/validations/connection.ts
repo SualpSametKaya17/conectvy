@@ -19,6 +19,7 @@ export const CreateConnectionSchema = z.object({
     .or(z.literal("")),
   companyId: z.coerce.number().int().positive().optional().nullable(),
   regionId: z.coerce.number().int().positive().optional().nullable(),
+  computerId: z.coerce.number().int().positive().optional().nullable(),
   notes: z
     .string()
     .max(2000, "Notlar en fazla 2000 karakter olabilir")
@@ -37,6 +38,7 @@ export const ConnectionQuerySchema = z.object({
   tool: ConnectionToolEnum.optional(),
   companyId: z.coerce.number().int().positive().optional(),
   regionId: z.coerce.number().int().positive().optional(),
+  computerId: z.coerce.number().int().positive().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });

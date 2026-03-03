@@ -58,12 +58,14 @@ interface Connection {
   remoteId: string;
   company: { id: number; name: string } | null;
   region: { id: number; name: string } | null;
+  computer: { id: number; name: string } | null;
   notes: string | null;
   updatedAt: string;
 }
 
-interface Company { id: number; name: string }
-interface Region  { id: number; name: string }
+interface Company  { id: number; name: string }
+interface Region   { id: number; name: string }
+interface Computer { id: number; name: string; company: { id: number; name: string } }
 
 const toolBadge: Record<string, "default" | "secondary" | "outline"> = {
   RUSTDESK: "default",
@@ -81,8 +83,9 @@ export default function ConnectionsPage() {
   const [toolFilter, setToolFilter] = useState<string>("ALL");
   const [loading, setLoading] = useState(false);
 
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [regions, setRegions] = useState<Region[]>([]);
+  const [companies, setCompanies]   = useState<Company[]>([]);
+  const [regions, setRegions]       = useState<Region[]>([]);
+  const [computers, setComputers]   = useState<Computer[]>([]);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -114,13 +117,15 @@ export default function ConnectionsPage() {
   }, [page, search, toolFilter]);
 
   const fetchMeta = useCallback(async () => {
-    const [cRes, rRes] = await Promise.all([
+    const [cRes, rRes, compRes] = await Promise.all([
       fetch("/api/companies?pageSize=200"),
       fetch("/api/regions?pageSize=200"),
+      fetch("/api/computers?pageSize=500"),
     ]);
-    const [cJson, rJson] = await Promise.all([cRes.json(), rRes.json()]);
-    if (cJson.success) setCompanies(cJson.data.items);
-    if (rJson.success) setRegions(rJson.data.items);
+    const [cJson, rJson, compJson] = await Promise.all([cRes.json(), rRes.json(), compRes.json()]);
+    if (cJson.success)    setCompanies(cJson.data.items);
+    if (rJson.success)    setRegions(rJson.data.items);
+    if (compJson.success) setComputers(compJson.data.items);
   }, []);
 
   useEffect(() => { fetchConnections(); }, [fetchConnections]);
@@ -146,6 +151,7 @@ export default function ConnectionsPage() {
         password: d.password ?? "",
         companyId: d.companyId,
         regionId: d.regionId,
+        computerId: d.computerId,
         notes: d.notes ?? "",
       });
       setDialogOpen(true);
@@ -227,6 +233,7 @@ export default function ConnectionsPage() {
               <TableHead>Araç</TableHead>
               <TableHead>Remote ID</TableHead>
               <TableHead>Şifre</TableHead>
+              <TableHead>Bilgisayar</TableHead>
               <TableHead>Firma</TableHead>
               <TableHead>Bölge</TableHead>
               <TableHead>Güncelleme</TableHead>
@@ -236,13 +243,13 @@ export default function ConnectionsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">
                   Yükleniyor...
                 </TableCell>
               </TableRow>
             ) : connections.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">
                   Bağlantı bulunamadı.
                 </TableCell>
               </TableRow>
@@ -285,6 +292,7 @@ export default function ConnectionsPage() {
                       </Button>
                     </div>
                   </TableCell>
+                  <TableCell className="text-sm">{conn.computer?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm">{conn.company?.name ?? "—"}</TableCell>
                   <TableCell className="text-sm">{conn.region?.name ?? "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
@@ -361,6 +369,7 @@ export default function ConnectionsPage() {
             connectionId={editingConnection?.id}
             companies={companies}
             regions={regions}
+            computers={computers}
             onSuccess={() => {
               setDialogOpen(false);
               fetchConnections();

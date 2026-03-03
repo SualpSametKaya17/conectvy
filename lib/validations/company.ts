@@ -10,6 +10,8 @@ export const CreateCompanySchema = z.object({
     .max(1000, "Açıklama en fazla 1000 karakter olabilir")
     .optional()
     .or(z.literal("")),
+  maintenanceStartDate: z.string().optional().nullable(),
+  maintenanceEndDate: z.string().optional().nullable(),
 });
 
 export const UpdateCompanySchema = CreateCompanySchema.partial();

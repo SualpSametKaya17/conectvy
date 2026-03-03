@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * Companies Sayfası
- *
- * Acceptance Criteria:
- * - Firmalar tablo şeklinde listelenir (Ad, Açıklama, Bağlantı Sayısı, Bölge Sayısı).
- * - Arama çubuğu ile firma adına göre filtre yapılır.
- * - "Yeni Firma" butonu dialog açar, form Zod ile doğrulanır.
- * - Satır menüsünden düzenle ve sil (soft delete) yapılabilir.
- * - Aynı isimde firma eklenemez (server 409, toast ile gösterilir).
- */
-
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,7 +23,27 @@ interface Company {
   id: number;
   name: string;
   description: string | null;
-  _count: { connections: number; regions: number };
+  maintenanceStartDate: string | null;
+  maintenanceEndDate: string | null;
+  _count: { connections: number; regions: number; computers: number };
+}
+
+function getMaintenanceStatus(endDate: string | null): "active" | "expiring" | "expired" | "none" {
+  if (!endDate) return "none";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  if (end < today) return "expired";
+  const daysLeft = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return daysLeft <= 30 ? "expiring" : "active";
+}
+
+function MaintenanceBadge({ endDate }: { endDate: string | null }) {
+  const status = getMaintenanceStatus(endDate);
+  if (status === "none") return <Badge variant="outline" className="text-muted-foreground">Yok</Badge>;
+  if (status === "expired") return <Badge variant="destructive">Süresi Doldu</Badge>;
+  if (status === "expiring") return <Badge className="bg-orange-500 hover:bg-orange-600">Yakında Bitiyor</Badge>;
+  return <Badge className="bg-green-600 hover:bg-green-700">Aktif</Badge>;
 }
 
 function CompanyForm({
@@ -49,6 +58,12 @@ function CompanyForm({
     defaultValues: {
       name: item?.name ?? "",
       description: item?.description ?? "",
+      maintenanceStartDate: item?.maintenanceStartDate
+        ? item.maintenanceStartDate.substring(0, 10)
+        : "",
+      maintenanceEndDate: item?.maintenanceEndDate
+        ? item.maintenanceEndDate.substring(0, 10)
+        : "",
     },
   });
 
@@ -59,7 +74,11 @@ function CompanyForm({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          maintenanceStartDate: values.maintenanceStartDate || null,
+          maintenanceEndDate: values.maintenanceEndDate || null,
+        }),
       });
       const json = await res.json();
       if (!res.ok) { toast.error(json.error ?? "Hata"); return; }
@@ -97,6 +116,40 @@ function CompanyForm({
             </FormItem>
           )}
         />
+
+        {/* Bakım Destek Tarihleri */}
+        <div className="rounded-md border p-3 space-y-3">
+          <p className="text-sm font-medium text-muted-foreground">Yıllık Bakım Desteği</p>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="maintenanceStartDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Başlangıç Tarihi</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="maintenanceEndDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bitiş Tarihi</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
         <div className="flex justify-end pt-2">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? "Kaydediliyor..." : item ? "Güncelle" : "Oluştur"}
@@ -152,6 +205,16 @@ export default function CompaniesPage() {
           render: (r) => (
             <span className="text-sm text-muted-foreground line-clamp-1">{r.description ?? "—"}</span>
           ),
+        },
+        {
+          key: "maintenance",
+          header: "Bakım Desteği",
+          render: (r) => <MaintenanceBadge endDate={r.maintenanceEndDate} />,
+        },
+        {
+          key: "computers",
+          header: "Bilgisayar",
+          render: (r) => <Badge variant="secondary">{r._count.computers}</Badge>,
         },
         {
           key: "connections",

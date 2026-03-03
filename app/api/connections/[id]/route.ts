@@ -17,16 +17,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .query(`
       SELECT
         c.id, c.name, c.tool,
-        c.remote_id AS remoteId,
+        c.remote_id   AS remoteId,
         c.password,
-        c.company_id AS companyId, co.name AS companyName,
-        c.region_id  AS regionId,  r.name  AS regionName,
+        c.company_id  AS companyId,  co.name  AS companyName,
+        c.region_id   AS regionId,   r.name   AS regionName,
+        c.computer_id AS computerId, cmp.name AS computerName,
         c.notes, c.is_active AS isActive,
         c.last_connected_at AS lastConnectedAt,
         c.created_at AS createdAt, c.updated_at AS updatedAt
       FROM connections c
-      LEFT JOIN companies co ON co.id = c.company_id
-      LEFT JOIN regions   r  ON r.id  = c.region_id
+      LEFT JOIN companies co  ON co.id  = c.company_id
+      LEFT JOIN regions   r   ON r.id   = c.region_id
+      LEFT JOIN computers cmp ON cmp.id = c.computer_id
       WHERE c.id = @id AND c.is_active = 1
     `);
 
@@ -35,8 +37,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   return apiSuccess({
     ...row,
-    company: row.companyId ? { id: row.companyId, name: row.companyName } : null,
-    region:  row.regionId  ? { id: row.regionId,  name: row.regionName  } : null,
+    company:  row.companyId  ? { id: row.companyId,  name: row.companyName  } : null,
+    region:   row.regionId   ? { id: row.regionId,   name: row.regionName   } : null,
+    computer: row.computerId ? { id: row.computerId, name: row.computerName } : null,
   });
 }
 
@@ -54,13 +57,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const sets: string[] = [];
     const req = pool.request().input("id", sql.Int, parsed.data.id);
 
-    if (update.data.name      !== undefined) { sets.push("name = @name");           req.input("name",      sql.NVarChar, update.data.name); }
-    if (update.data.tool      !== undefined) { sets.push("tool = @tool");           req.input("tool",      sql.NVarChar, update.data.tool); }
-    if (update.data.remoteId  !== undefined) { sets.push("remote_id = @remoteId");  req.input("remoteId",  sql.NVarChar, update.data.remoteId); }
-    if (update.data.password  !== undefined) { sets.push("password = @password");   req.input("password",  sql.NVarChar, update.data.password  || null); }
-    if (update.data.companyId !== undefined) { sets.push("company_id = @companyId");req.input("companyId", sql.Int,      update.data.companyId ?? null); }
-    if (update.data.regionId  !== undefined) { sets.push("region_id = @regionId");  req.input("regionId",  sql.Int,      update.data.regionId  ?? null); }
-    if (update.data.notes     !== undefined) { sets.push("notes = @notes");         req.input("notes",     sql.NVarChar, update.data.notes     || null); }
+    if (update.data.name       !== undefined) { sets.push("name = @name");              req.input("name",       sql.NVarChar, update.data.name); }
+    if (update.data.tool       !== undefined) { sets.push("tool = @tool");              req.input("tool",       sql.NVarChar, update.data.tool); }
+    if (update.data.remoteId   !== undefined) { sets.push("remote_id = @remoteId");     req.input("remoteId",   sql.NVarChar, update.data.remoteId); }
+    if (update.data.password   !== undefined) { sets.push("password = @password");      req.input("password",   sql.NVarChar, update.data.password   || null); }
+    if (update.data.companyId  !== undefined) { sets.push("company_id = @companyId");   req.input("companyId",  sql.Int,      update.data.companyId  ?? null); }
+    if (update.data.regionId   !== undefined) { sets.push("region_id = @regionId");     req.input("regionId",   sql.Int,      update.data.regionId   ?? null); }
+    if (update.data.computerId !== undefined) { sets.push("computer_id = @computerId"); req.input("computerId", sql.Int,      update.data.computerId ?? null); }
+    if (update.data.notes      !== undefined) { sets.push("notes = @notes");            req.input("notes",      sql.NVarChar, update.data.notes      || null); }
 
     if (sets.length === 0) return apiError("Güncellenecek alan yok", 400);
 
@@ -70,14 +74,16 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       .input("id", sql.Int, parsed.data.id)
       .query(`
         SELECT c.id, c.name, c.tool,
-          c.remote_id AS remoteId, c.password,
-          c.company_id AS companyId, co.name AS companyName,
-          c.region_id  AS regionId,  r.name  AS regionName,
+          c.remote_id   AS remoteId, c.password,
+          c.company_id  AS companyId,  co.name  AS companyName,
+          c.region_id   AS regionId,   r.name   AS regionName,
+          c.computer_id AS computerId, cmp.name AS computerName,
           c.notes, c.is_active AS isActive,
           c.created_at AS createdAt, c.updated_at AS updatedAt
         FROM connections c
-        LEFT JOIN companies co ON co.id = c.company_id
-        LEFT JOIN regions   r  ON r.id  = c.region_id
+        LEFT JOIN companies co  ON co.id  = c.company_id
+        LEFT JOIN regions   r   ON r.id   = c.region_id
+        LEFT JOIN computers cmp ON cmp.id = c.computer_id
         WHERE c.id = @id
       `);
 
@@ -86,8 +92,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     return apiSuccess({
       ...row,
-      company: row.companyId ? { id: row.companyId, name: row.companyName } : null,
-      region:  row.regionId  ? { id: row.regionId,  name: row.regionName  } : null,
+      company:  row.companyId  ? { id: row.companyId,  name: row.companyName  } : null,
+      region:   row.regionId   ? { id: row.regionId,   name: row.regionName   } : null,
+      computer: row.computerId ? { id: row.computerId, name: row.computerName } : null,
     });
   } catch (error) {
     console.error("[PATCH /api/connections/:id]", error);

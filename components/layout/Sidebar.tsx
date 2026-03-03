@@ -9,6 +9,7 @@ import {
   Map,
   Settings,
   Wifi,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -26,6 +27,7 @@ const navItems = [
     group: "Tanımlar",
     items: [
       { href: "/companies", label: "Firmalar", icon: Building2 },
+      { href: "/computers", label: "Bilgisayarlar", icon: Cpu },
       { href: "/regions", label: "Bölgeler", icon: Map },
     ],
   },
