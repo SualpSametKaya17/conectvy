@@ -1,67 +1,115 @@
 -- ============================================================
 -- Migration V2: Computers & Maintenance Support
--- Conectvy - Çalıştırma: SQL Server Management Studio veya sqlcmd
+-- Conectvy
+--
+-- SSMS'de çalıştırmadan önce üstteki dropdown'dan
+-- doğru veritabanını seçin (örn: ConectvyDB)
 -- ============================================================
 
--- 1. companies tablosuna bakım tarihleri ekleniyor
-IF NOT EXISTS (
-  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_NAME = 'companies' AND COLUMN_NAME = 'maintenance_start_date'
-)
+-- Doğru veritabanında olduğumuzu kontrol et
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'companies')
 BEGIN
-  ALTER TABLE dbo.companies
-    ADD maintenance_start_date DATE NULL,
-        maintenance_end_date   DATE NULL;
+  RAISERROR('HATA: companies tablosu bulunamadı. Lütfen SSMS üstteki açılır menüden doğru veritabanını seçin (ConectvyDB).', 16, 1);
+  RETURN;
 END
 GO
 
--- 2. computers tablosu oluşturuluyor
-IF OBJECT_ID(N'dbo.computers', N'U') IS NULL
+-- ── 1. companies tablosuna bakım tarihleri ───────────────────
+IF NOT EXISTS (
+  SELECT 1 FROM sys.columns
+  WHERE object_id = OBJECT_ID('companies') AND name = 'maintenance_start_date'
+)
 BEGIN
-  CREATE TABLE dbo.computers (
+  ALTER TABLE companies
+    ADD maintenance_start_date DATE NULL,
+        maintenance_end_date   DATE NULL;
+  PRINT 'companies: maintenance tarihleri eklendi.';
+END
+ELSE
+  PRINT 'companies: maintenance tarihleri zaten mevcut, atlandı.';
+GO
+
+-- ── 2. computers tablosunu oluştur (FK OLMADAN) ──────────────
+IF OBJECT_ID('computers', 'U') IS NULL
+BEGIN
+  CREATE TABLE computers (
     id          INT IDENTITY(1,1) NOT NULL,
     company_id  INT NOT NULL,
     name        NVARCHAR(255) NOT NULL,
     description NVARCHAR(1000) NULL,
-    is_active   BIT NOT NULL CONSTRAINT DF_computers_is_active DEFAULT 1,
-    created_at  DATETIME2 NOT NULL CONSTRAINT DF_computers_created_at DEFAULT GETDATE(),
-    updated_at  DATETIME2 NOT NULL CONSTRAINT DF_computers_updated_at DEFAULT GETDATE(),
-    CONSTRAINT PK_computers PRIMARY KEY (id),
-    CONSTRAINT FK_computers_companies FOREIGN KEY (company_id)
-      REFERENCES dbo.companies (id)
+    is_active   BIT NOT NULL DEFAULT 1,
+    created_at  DATETIME2 NOT NULL DEFAULT GETDATE(),
+    updated_at  DATETIME2 NOT NULL DEFAULT GETDATE(),
+    CONSTRAINT PK_computers PRIMARY KEY (id)
   );
+  PRINT 'computers tablosu oluşturuldu.';
 END
+ELSE
+  PRINT 'computers tablosu zaten mevcut, atlandı.';
 GO
 
--- 3. connections tablosuna computer_id ekleniyor (opsiyonel FK)
+-- ── 3. computers → companies FK (ayrı adımda) ───────────────
 IF NOT EXISTS (
-  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_NAME = 'connections' AND COLUMN_NAME = 'computer_id'
+  SELECT 1 FROM sys.foreign_keys
+  WHERE name = 'FK_computers_companies'
 )
 BEGIN
-  ALTER TABLE dbo.connections
-    ADD computer_id INT NULL
-    CONSTRAINT FK_connections_computers FOREIGN KEY
-      REFERENCES dbo.computers (id);
+  ALTER TABLE computers
+    ADD CONSTRAINT FK_computers_companies
+    FOREIGN KEY (company_id) REFERENCES companies (id);
+  PRINT 'FK_computers_companies eklendi.';
 END
+ELSE
+  PRINT 'FK_computers_companies zaten mevcut, atlandı.';
 GO
 
--- 4. computers.updated_at için trigger
-CREATE OR ALTER TRIGGER dbo.trg_computers_updated_at
-ON dbo.computers
+-- ── 4. connections tablosuna computer_id ekle ────────────────
+IF NOT EXISTS (
+  SELECT 1 FROM sys.columns
+  WHERE object_id = OBJECT_ID('connections') AND name = 'computer_id'
+)
+BEGIN
+  ALTER TABLE connections
+    ADD computer_id INT NULL;
+  PRINT 'connections.computer_id kolonu eklendi.';
+END
+ELSE
+  PRINT 'connections.computer_id zaten mevcut, atlandı.';
+GO
+
+-- ── 5. connections → computers FK (ayrı adımda) ─────────────
+IF NOT EXISTS (
+  SELECT 1 FROM sys.foreign_keys
+  WHERE name = 'FK_connections_computers'
+)
+BEGIN
+  ALTER TABLE connections
+    ADD CONSTRAINT FK_connections_computers
+    FOREIGN KEY (computer_id) REFERENCES computers (id);
+  PRINT 'FK_connections_computers eklendi.';
+END
+ELSE
+  PRINT 'FK_connections_computers zaten mevcut, atlandı.';
+GO
+
+-- ── 6. computers.updated_at trigger ─────────────────────────
+CREATE OR ALTER TRIGGER trg_computers_updated_at
+ON computers
 AFTER UPDATE
 AS
-  UPDATE dbo.computers
+  UPDATE computers
     SET updated_at = GETDATE()
   WHERE id IN (SELECT id FROM inserted);
 GO
+PRINT 'trg_computers_updated_at trigger oluşturuldu.';
+GO
 
--- ============================================================
--- Kontrol sorguları
-SELECT 'computers tablosu' AS tablo, COUNT(*) AS kayit FROM dbo.computers;
-SELECT 'maintenance_start_date' AS kolon, COLUMN_NAME, DATA_TYPE
-  FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_NAME = 'companies' AND COLUMN_NAME LIKE 'maintenance%';
-SELECT 'computer_id' AS kolon, COLUMN_NAME, DATA_TYPE
-  FROM INFORMATION_SCHEMA.COLUMNS
-  WHERE TABLE_NAME = 'connections' AND COLUMN_NAME = 'computer_id';
+-- ── Kontrol ──────────────────────────────────────────────────
+SELECT 'Tablo listesi' AS bilgi, name FROM sys.tables ORDER BY name;
+
+SELECT 'computers kolonları' AS bilgi, COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+  FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'computers';
+
+SELECT 'FK listesi' AS bilgi, name AS fk_name, OBJECT_NAME(parent_object_id) AS tablo
+  FROM sys.foreign_keys
+  WHERE name IN ('FK_computers_companies', 'FK_connections_computers');
