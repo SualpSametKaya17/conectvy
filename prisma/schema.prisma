@@ -1,0 +1,122 @@
+// ─── Prisma Schema ──────────────────────────────────────────────────────────
+// Provider : SQL Server (MSSQL)
+// Strategy : single-user now, multi-user ready (User table, audit fields)
+// ──────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+// Multi-user altyapısı: şimdilik dummy/tek kullanıcı, ileride auth eklenir.
+model User {
+  id           Int          @id @default(autoincrement())
+  username     String       @unique @db.NVarChar(100)
+  email        String       @unique @db.NVarChar(255)
+  passwordHash String?      @db.NVarChar(255) @map("password_hash")
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  connections  Connection[]
+
+  @@map("users")
+}
+
+// ─── Company ──────────────────────────────────────────────────────────────────
+model Company {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique @db.NVarChar(255)
+  description String?      @db.NVarChar(1000)
+  isActive    Boolean      @default(true) @map("is_active")
+  createdBy   Int?         @map("created_by")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  regions     Region[]
+  connections Connection[]
+
+  @@map("companies")
+  @@index([name])
+}
+
+// ─── Region ───────────────────────────────────────────────────────────────────
+model Region {
+  id          Int          @id @default(autoincrement())
+  name        String       @db.NVarChar(255)
+  description String?      @db.NVarChar(1000)
+  companyId   Int?         @map("company_id")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdBy   Int?         @map("created_by")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  company     Company?     @relation(fields: [companyId], references: [id])
+  connections Connection[]
+
+  @@map("regions")
+  @@index([companyId])
+  @@index([name])
+}
+
+// ─── Connection ───────────────────────────────────────────────────────────────
+// ConnectionTool: SQL Server enum desteği olmadığından NVarChar kullanılır.
+// Zod ile uygulama seviyesinde kısıtlanır.
+model Connection {
+  id              Int      @id @default(autoincrement())
+  name            String   @db.NVarChar(255)
+  /// "RUSTDESK" | "ANYDESK" | "OTHER"
+  tool            String   @db.NVarChar(20)  @default("RUSTDESK")
+  remoteId        String   @db.NVarChar(100) @map("remote_id")
+  /// Şifre: ileride encrypt edilecek. Şimdilik plain text (local-only).
+  password        String?  @db.NVarChar(255)
+  companyId       Int?     @map("company_id")
+  regionId        Int?     @map("region_id")
+  notes           String?  @db.NVarChar(2000)
+  isActive        Boolean  @default(true) @map("is_active")
+  lastConnectedAt DateTime? @map("last_connected_at")
+  createdBy       Int?     @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  company Company?        @relation(fields: [companyId], references: [id])
+  region  Region?         @relation(fields: [regionId], references: [id])
+  creator User?           @relation(fields: [createdBy], references: [id])
+  tags    ConnectionTag[]
+
+  @@map("connections")
+  @@index([companyId])
+  @@index([regionId])
+  @@index([remoteId])
+  @@index([tool])
+  @@index([isActive])
+}
+
+// ─── Tag ──────────────────────────────────────────────────────────────────────
+model Tag {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique @db.NVarChar(100)
+  color       String?         @db.NVarChar(20) @default("#6366f1")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  connections ConnectionTag[]
+
+  @@map("tags")
+}
+
+// ─── ConnectionTag (pivot) ────────────────────────────────────────────────────
+model ConnectionTag {
+  connectionId Int        @map("connection_id")
+  tagId        Int        @map("tag_id")
+
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([connectionId, tagId])
+  @@map("connection_tags")
+}
