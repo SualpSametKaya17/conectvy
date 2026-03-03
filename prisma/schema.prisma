@@ -56,7 +56,7 @@ model Region {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
-  company     Company?     @relation(fields: [companyId], references: [id])
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   connections Connection[]
 
   @@map("regions")
@@ -84,9 +84,12 @@ model Connection {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  company Company?        @relation(fields: [companyId], references: [id])
-  region  Region?         @relation(fields: [regionId], references: [id])
-  creator User?           @relation(fields: [createdBy], references: [id])
+  // SQL Server'da çoklu cascade path (Company→Connection ve Company→Region→Connection)
+  // izin verilmediği için tüm FK'lara NoAction eklendi.
+  // Silme/güncelleme işlemleri uygulama katmanında (API) yönetilir.
+  company Company?        @relation(fields: [companyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  region  Region?         @relation(fields: [regionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creator User?           @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tags    ConnectionTag[]
 
   @@map("connections")
