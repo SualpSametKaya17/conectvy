@@ -1,46 +1,76 @@
-import { prisma } from "@/lib/prisma";
+import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/utils";
 
 /**
  * GET /api/dashboard
- * Dashboard için özet istatistikleri döner.
  */
 export async function GET() {
   try {
-    const [
-      totalConnections,
-      activeConnections,
-      totalCompanies,
-      totalRegions,
-      recentConnections,
-      toolStats,
-    ] = await Promise.all([
-      prisma.connection.count(),
-      prisma.connection.count({ where: { isActive: true } }),
-      prisma.company.count({ where: { isActive: true } }),
-      prisma.region.count({ where: { isActive: true } }),
-      prisma.connection.findMany({
-        take: 5,
-        orderBy: { updatedAt: "desc" },
-        include: { company: true, region: true },
-        where: { isActive: true },
-      }),
-      prisma.connection.groupBy({
-        by: ["tool"],
-        _count: { id: true },
-        where: { isActive: true },
-      }),
+    const pool = await getPool();
+
+    const [stats, recent, tools] = await Promise.all([
+      // Stat counts
+      pool.request().query<{
+        totalConnections: number;
+        activeConnections: number;
+        totalCompanies: number;
+        totalRegions: number;
+      }>(`
+        SELECT
+          (SELECT COUNT(*) FROM connections)                          AS totalConnections,
+          (SELECT COUNT(*) FROM connections WHERE is_active = 1)      AS activeConnections,
+          (SELECT COUNT(*) FROM companies   WHERE is_active = 1)      AS totalCompanies,
+          (SELECT COUNT(*) FROM regions     WHERE is_active = 1)      AS totalRegions
+      `),
+
+      // Son 5 bağlantı
+      pool.request().query(`
+        SELECT TOP 5
+          c.id, c.name, c.tool, c.remote_id AS remoteId, c.updated_at AS updatedAt,
+          co.id AS companyId, co.name AS companyName,
+          r.id  AS regionId,  r.name  AS regionName
+        FROM connections c
+        LEFT JOIN companies co ON co.id = c.company_id
+        LEFT JOIN regions   r  ON r.id  = c.region_id
+        WHERE c.is_active = 1
+        ORDER BY c.updated_at DESC
+      `),
+
+      // Araç dağılımı
+      pool.request().query(`
+        SELECT tool, COUNT(*) AS cnt
+        FROM connections
+        WHERE is_active = 1
+        GROUP BY tool
+      `),
     ]);
+
+    const s = stats.recordset[0];
+
+    const recentConnections = recent.recordset.map((row) => ({
+      id:        row.id,
+      name:      row.name,
+      tool:      row.tool,
+      remoteId:  row.remoteId,
+      updatedAt: row.updatedAt,
+      company:   row.companyId ? { id: row.companyId, name: row.companyName } : null,
+      region:    row.regionId  ? { id: row.regionId,  name: row.regionName  } : null,
+    }));
+
+    const toolStats = tools.recordset.map((row) => ({
+      tool:  row.tool,
+      count: row.cnt,
+    }));
 
     return apiSuccess({
       stats: {
-        totalConnections,
-        activeConnections,
-        totalCompanies,
-        totalRegions,
+        totalConnections:  s.totalConnections,
+        activeConnections: s.activeConnections,
+        totalCompanies:    s.totalCompanies,
+        totalRegions:      s.totalRegions,
       },
       recentConnections,
-      toolStats: toolStats.map((t) => ({ tool: t.tool, count: t._count.id })),
+      toolStats,
     });
   } catch (error) {
     console.error("[GET /api/dashboard]", error);

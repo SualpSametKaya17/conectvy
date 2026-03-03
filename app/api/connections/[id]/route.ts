@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
 import { UpdateConnectionSchema, ConnectionIdSchema } from "@/lib/validations/connection";
 
@@ -6,82 +6,105 @@ function parseId(params: { id: string }) {
   return ConnectionIdSchema.safeParse(params);
 }
 
-/**
- * GET /api/connections/:id
- * Şifreyi de döner (tek kayıt görüntüleme için).
- */
+/** GET /api/connections/:id  — şifreyi de döner */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const parsed = parseId(params);
   if (!parsed.success) return apiValidationError(parsed.error);
 
-  const connection = await prisma.connection.findUnique({
-    where: { id: parsed.data.id, isActive: true },
-    include: {
-      company: { select: { id: true, name: true } },
-      region: { select: { id: true, name: true } },
-      tags: { include: { tag: true } },
-    },
-  });
+  const pool   = await getPool();
+  const result = await pool.request()
+    .input("id", sql.Int, parsed.data.id)
+    .query(`
+      SELECT
+        c.id, c.name, c.tool,
+        c.remote_id AS remoteId,
+        c.password,
+        c.company_id AS companyId, co.name AS companyName,
+        c.region_id  AS regionId,  r.name  AS regionName,
+        c.notes, c.is_active AS isActive,
+        c.last_connected_at AS lastConnectedAt,
+        c.created_at AS createdAt, c.updated_at AS updatedAt
+      FROM connections c
+      LEFT JOIN companies co ON co.id = c.company_id
+      LEFT JOIN regions   r  ON r.id  = c.region_id
+      WHERE c.id = @id AND c.is_active = 1
+    `);
 
-  if (!connection) return apiError("Bağlantı bulunamadı", 404);
-  return apiSuccess(connection);
+  const row = result.recordset[0];
+  if (!row) return apiError("Bağlantı bulunamadı", 404);
+
+  return apiSuccess({
+    ...row,
+    company: row.companyId ? { id: row.companyId, name: row.companyName } : null,
+    region:  row.regionId  ? { id: row.regionId,  name: row.regionName  } : null,
+  });
 }
 
-/**
- * PATCH /api/connections/:id
- */
+/** PATCH /api/connections/:id */
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const parsed = parseId(params);
   if (!parsed.success) return apiValidationError(parsed.error);
 
-  const body = await request.json();
+  const body   = await request.json();
   const update = UpdateConnectionSchema.safeParse(body);
   if (!update.success) return apiValidationError(update.error);
 
   try {
-    const connection = await prisma.connection.update({
-      where: { id: parsed.data.id },
-      data: {
-        ...(update.data.name !== undefined && { name: update.data.name }),
-        ...(update.data.tool !== undefined && { tool: update.data.tool }),
-        ...(update.data.remoteId !== undefined && { remoteId: update.data.remoteId }),
-        ...(update.data.password !== undefined && { password: update.data.password || null }),
-        ...(update.data.companyId !== undefined && { companyId: update.data.companyId ?? null }),
-        ...(update.data.regionId !== undefined && { regionId: update.data.regionId ?? null }),
-        ...(update.data.notes !== undefined && { notes: update.data.notes || null }),
-      },
-      include: {
-        company: { select: { id: true, name: true } },
-        region: { select: { id: true, name: true } },
-        tags: { include: { tag: true } },
-      },
+    const pool = await getPool();
+    const sets: string[] = [];
+    const req = pool.request().input("id", sql.Int, parsed.data.id);
+
+    if (update.data.name      !== undefined) { sets.push("name = @name");           req.input("name",      sql.NVarChar, update.data.name); }
+    if (update.data.tool      !== undefined) { sets.push("tool = @tool");           req.input("tool",      sql.NVarChar, update.data.tool); }
+    if (update.data.remoteId  !== undefined) { sets.push("remote_id = @remoteId");  req.input("remoteId",  sql.NVarChar, update.data.remoteId); }
+    if (update.data.password  !== undefined) { sets.push("password = @password");   req.input("password",  sql.NVarChar, update.data.password  || null); }
+    if (update.data.companyId !== undefined) { sets.push("company_id = @companyId");req.input("companyId", sql.Int,      update.data.companyId ?? null); }
+    if (update.data.regionId  !== undefined) { sets.push("region_id = @regionId");  req.input("regionId",  sql.Int,      update.data.regionId  ?? null); }
+    if (update.data.notes     !== undefined) { sets.push("notes = @notes");         req.input("notes",     sql.NVarChar, update.data.notes     || null); }
+
+    if (sets.length === 0) return apiError("Güncellenecek alan yok", 400);
+
+    await req.query(`UPDATE connections SET ${sets.join(", ")} WHERE id = @id`);
+
+    const updated = await pool.request()
+      .input("id", sql.Int, parsed.data.id)
+      .query(`
+        SELECT c.id, c.name, c.tool,
+          c.remote_id AS remoteId, c.password,
+          c.company_id AS companyId, co.name AS companyName,
+          c.region_id  AS regionId,  r.name  AS regionName,
+          c.notes, c.is_active AS isActive,
+          c.created_at AS createdAt, c.updated_at AS updatedAt
+        FROM connections c
+        LEFT JOIN companies co ON co.id = c.company_id
+        LEFT JOIN regions   r  ON r.id  = c.region_id
+        WHERE c.id = @id
+      `);
+
+    const row = updated.recordset[0];
+    if (!row) return apiError("Bağlantı bulunamadı", 404);
+
+    return apiSuccess({
+      ...row,
+      company: row.companyId ? { id: row.companyId, name: row.companyName } : null,
+      region:  row.regionId  ? { id: row.regionId,  name: row.regionName  } : null,
     });
-    return apiSuccess(connection);
-  } catch (error: unknown) {
-    const e = error as { code?: string };
-    if (e?.code === "P2025") return apiError("Bağlantı bulunamadı", 404);
+  } catch (error) {
     console.error("[PATCH /api/connections/:id]", error);
     return apiError("Bağlantı güncellenemedi", 500);
   }
 }
 
-/**
- * DELETE /api/connections/:id  (soft delete)
- */
+/** DELETE /api/connections/:id  (soft delete) */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const parsed = parseId(params);
   if (!parsed.success) return apiValidationError(parsed.error);
 
-  try {
-    await prisma.connection.update({
-      where: { id: parsed.data.id },
-      data: { isActive: false },
-    });
-    return apiSuccess({ deleted: true });
-  } catch (error: unknown) {
-    const e = error as { code?: string };
-    if (e?.code === "P2025") return apiError("Bağlantı bulunamadı", 404);
-    console.error("[DELETE /api/connections/:id]", error);
-    return apiError("Bağlantı silinemedi", 500);
-  }
+  const pool   = await getPool();
+  const result = await pool.request()
+    .input("id", sql.Int, parsed.data.id)
+    .query("UPDATE connections SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
+
+  if (!result.recordset[0]?.affected) return apiError("Bağlantı bulunamadı", 404);
+  return apiSuccess({ deleted: true });
 }

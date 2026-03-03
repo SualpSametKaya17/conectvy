@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getPool } from "@/lib/db";
 
 /**
  * GET /api/health
- * DB bağlantısını ve uygulama durumunu kontrol eder.
- * Settings sayfasında kullanılır.
  */
 export async function GET() {
   try {
-    // Simple query to verify DB connection
-    await prisma.$queryRaw`SELECT 1`;
+    const pool = await getPool();
+    await pool.request().query("SELECT 1 AS ok");
     return NextResponse.json({
       status: "ok",
       db: "connected",

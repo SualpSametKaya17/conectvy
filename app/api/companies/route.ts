@@ -1,9 +1,9 @@
-import { prisma } from "@/lib/prisma";
+import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
 import { CreateCompanySchema, CompanyQuerySchema } from "@/lib/validations/company";
 
 /**
- * GET /api/companies?search=...&page=1&pageSize=20
+ * GET /api/companies
  */
 export async function GET(request: Request) {
   try {
@@ -12,24 +12,37 @@ export async function GET(request: Request) {
     if (!query.success) return apiValidationError(query.error);
 
     const { search, page, pageSize } = query.data;
-    const skip = (page - 1) * pageSize;
+    const offset = (page - 1) * pageSize;
 
-    const where = search
-      ? { name: { contains: search } }
-      : {};
+    const pool = await getPool();
+    const req  = pool.request()
+      .input("search",   sql.NVarChar, search ? `%${search}%` : "%")
+      .input("pageSize", sql.Int, pageSize)
+      .input("offset",   sql.Int, offset);
 
-    const [items, total] = await Promise.all([
-      prisma.company.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy: { name: "asc" },
-        include: { _count: { select: { connections: true, regions: true } } },
-      }),
-      prisma.company.count({ where }),
+    const [items, count] = await Promise.all([
+      req.query(`
+        SELECT
+          c.id, c.name, c.description, c.is_active AS isActive,
+          c.created_at AS createdAt, c.updated_at AS updatedAt,
+          (SELECT COUNT(*) FROM connections cn WHERE cn.company_id = c.id) AS connectionCount,
+          (SELECT COUNT(*) FROM regions     r  WHERE r.company_id  = c.id) AS regionCount
+        FROM companies c
+        WHERE c.name LIKE @search
+        ORDER BY c.name
+        OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+      `),
+      pool.request()
+        .input("search", sql.NVarChar, search ? `%${search}%` : "%")
+        .query(`SELECT COUNT(*) AS total FROM companies WHERE name LIKE @search`),
     ]);
 
-    return apiSuccess({ items, total, page, pageSize });
+    const formatted = items.recordset.map((r) => ({
+      ...r,
+      _count: { connections: r.connectionCount, regions: r.regionCount },
+    }));
+
+    return apiSuccess({ items: formatted, total: count.recordset[0].total, page, pageSize });
   } catch (error) {
     console.error("[GET /api/companies]", error);
     return apiError("Firmalar alınamadı", 500);
@@ -41,21 +54,31 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body   = await request.json();
     const parsed = CreateCompanySchema.safeParse(body);
     if (!parsed.success) return apiValidationError(parsed.error);
 
     const { name, description } = parsed.data;
+    const pool = await getPool();
 
-    // Uniqueness check (Prisma will also throw, but we give friendly message)
-    const existing = await prisma.company.findUnique({ where: { name } });
-    if (existing) return apiError("Bu firma adı zaten kayıtlı", 409);
+    // Uniqueness check
+    const exists = await pool.request()
+      .input("name", sql.NVarChar, name)
+      .query("SELECT id FROM companies WHERE name = @name");
+    if (exists.recordset.length > 0) return apiError("Bu firma adı zaten kayıtlı", 409);
 
-    const company = await prisma.company.create({
-      data: { name, description: description || null },
-    });
+    const result = await pool.request()
+      .input("name",        sql.NVarChar, name)
+      .input("description", sql.NVarChar, description || null)
+      .query(`
+        INSERT INTO companies (name, description)
+        OUTPUT INSERTED.id, INSERTED.name, INSERTED.description,
+               INSERTED.is_active AS isActive,
+               INSERTED.created_at AS createdAt, INSERTED.updated_at AS updatedAt
+        VALUES (@name, @description)
+      `);
 
-    return apiSuccess(company, 201);
+    return apiSuccess(result.recordset[0], 201);
   } catch (error) {
     console.error("[POST /api/companies]", error);
     return apiError("Firma oluşturulamadı", 500);
