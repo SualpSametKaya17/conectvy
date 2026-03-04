@@ -71,7 +71,7 @@ function ComputerForm({
   const form = useForm<CreateComputerInput>({
     resolver: zodResolver(CreateComputerSchema),
     defaultValues: {
-      companyId: item?.company.id ?? (companies[0]?.id ?? 0),
+      companyId: item?.company.id ?? 0,
       name: item?.name ?? "",
       description: item?.description ?? "",
     },
@@ -106,7 +106,7 @@ function ComputerForm({
               <FormLabel>Firma *</FormLabel>
               <Select
                 onValueChange={(v) => field.onChange(Number(v))}
-                value={field.value?.toString()}
+                value={field.value > 0 ? field.value.toString() : ""}
               >
                 <FormControl>
                   <SelectTrigger>
@@ -379,6 +379,7 @@ export default function ComputersPage() {
             </DialogTitle>
           </DialogHeader>
           <ComputerForm
+            key={dialogOpen ? (editingComputer?.id ?? "new") : undefined}
             item={editingComputer}
             companies={companies}
             onSuccess={() => {
