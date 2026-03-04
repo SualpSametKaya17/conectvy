@@ -41,6 +41,16 @@ async function getPool(): Promise<sql.ConnectionPool> {
     // Hata olursa sessizce geç — tablo henüz oluşturulmamış olabilir
   }
 
+  try {
+    await pool.request().query(`
+      IF OBJECT_ID('connections','U') IS NOT NULL AND
+         NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('connections') AND name = 'computer_id')
+        ALTER TABLE connections ADD computer_id INT NULL REFERENCES computers(id);
+    `);
+  } catch {
+    // Hata olursa sessizce geç
+  }
+
   if (process.env.NODE_ENV !== "production") {
     global._mssqlPool = pool;
   }

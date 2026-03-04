@@ -241,26 +241,33 @@ function ComputerForm({
         toDelete.map((r) => fetch(`/api/connections/${r.id}`, { method: "DELETE" }))
       );
 
-      // 3. Yeni bağlantıları oluştur
+      // 3. Yeni bağlantıları oluştur (sırayla — hata tespiti için)
       const toCreate = connRows.filter((r) => !r.id && !r._delete && r.remoteId);
-      await Promise.all(
-        toCreate.map((r) =>
-          fetch("/api/connections", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name:      `${values.name} — ${getToolLabel(r.tool)}`,
-              tool:      r.tool,
-              remoteId:  r.remoteId,
-              password:  r.password || undefined,
-              companyId: values.companyId,
-              computerId,
-            }),
-          })
-        )
-      );
+      const connErrors: string[] = [];
+      for (const r of toCreate) {
+        const connRes = await fetch("/api/connections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name:      `${values.name} — ${getToolLabel(r.tool)}`,
+            tool:      r.tool,
+            remoteId:  r.remoteId,
+            password:  r.password || undefined,
+            companyId: values.companyId,
+            computerId,
+          }),
+        });
+        if (!connRes.ok) {
+          const connJson = await connRes.json().catch(() => ({}));
+          connErrors.push(`${getToolLabel(r.tool)} (${r.remoteId}): ${connJson.error ?? "Hata"}`);
+        }
+      }
 
-      toast.success(item ? "Cihaz güncellendi" : "Cihaz oluşturuldu");
+      if (connErrors.length > 0) {
+        toast.warning(`Cihaz kaydedildi ama bazı bağlantılar eklenemedi:\n${connErrors.join("\n")}`);
+      } else {
+        toast.success(item ? "Cihaz güncellendi" : "Cihaz oluşturuldu");
+      }
       onSuccess();
     } catch {
       toast.error("Sunucuya ulaşılamadı");
