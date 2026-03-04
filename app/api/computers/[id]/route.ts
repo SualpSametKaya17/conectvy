@@ -8,8 +8,8 @@ function getIdParam(params: { id: string }): number | null {
 }
 
 /** GET /api/computers/:id */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const id = getIdParam(params);
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
   if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();
@@ -39,8 +39,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 /** PATCH /api/computers/:id */
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const id = getIdParam(params);
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
   if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const body   = await request.json();
@@ -84,8 +84,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 /** DELETE /api/computers/:id  (soft delete) */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const id = getIdParam(params);
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
   if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();

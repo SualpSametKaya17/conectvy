@@ -1,19 +1,20 @@
 import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
-import { UpdateConnectionSchema, ConnectionIdSchema } from "@/lib/validations/connection";
+import { UpdateConnectionSchema } from "@/lib/validations/connection";
 
-function parseId(params: { id: string }) {
-  return ConnectionIdSchema.safeParse(params);
+function getIdParam(params: { id: string }): number | null {
+  const n = parseInt(params.id, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 /** GET /api/connections/:id  — şifreyi de döner */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();
   const result = await pool.request()
-    .input("id", sql.Int, parsed.data.id)
+    .input("id", sql.Int, id)
     .query(`
       SELECT
         c.id, c.name, c.tool,
@@ -44,9 +45,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 /** PATCH /api/connections/:id */
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const body   = await request.json();
   const update = UpdateConnectionSchema.safeParse(body);
@@ -55,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   try {
     const pool = await getPool();
     const sets: string[] = [];
-    const req = pool.request().input("id", sql.Int, parsed.data.id);
+    const req = pool.request().input("id", sql.Int, id);
 
     if (update.data.name       !== undefined) { sets.push("name = @name");              req.input("name",       sql.NVarChar, update.data.name); }
     if (update.data.tool       !== undefined) { sets.push("tool = @tool");              req.input("tool",       sql.NVarChar, update.data.tool); }
@@ -71,7 +72,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     await req.query(`UPDATE connections SET ${sets.join(", ")} WHERE id = @id`);
 
     const updated = await pool.request()
-      .input("id", sql.Int, parsed.data.id)
+      .input("id", sql.Int, id)
       .query(`
         SELECT c.id, c.name, c.tool,
           c.remote_id   AS remoteId, c.password,
@@ -103,13 +104,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 /** DELETE /api/connections/:id  (soft delete) */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();
   const result = await pool.request()
-    .input("id", sql.Int, parsed.data.id)
+    .input("id", sql.Int, id)
     .query("UPDATE connections SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
 
   if (!result.recordset[0]?.affected) return apiError("Bağlantı bulunamadı", 404);

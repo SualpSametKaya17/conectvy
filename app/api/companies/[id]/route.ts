@@ -1,19 +1,20 @@
 import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
-import { UpdateCompanySchema, CompanyIdSchema } from "@/lib/validations/company";
+import { UpdateCompanySchema } from "@/lib/validations/company";
 
-function parseId(params: { id: string }) {
-  return CompanyIdSchema.safeParse(params);
+function getIdParam(params: { id: string }): number | null {
+  const n = parseInt(params.id, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 /** GET /api/companies/:id */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();
   const result = await pool.request()
-    .input("id", sql.Int, parsed.data.id)
+    .input("id", sql.Int, id)
     .query(`
       SELECT c.id, c.name, c.description, c.is_active AS isActive,
              c.maintenance_start_date AS maintenanceStartDate,
@@ -30,9 +31,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 /** PATCH /api/companies/:id */
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const body   = await request.json();
   const update = UpdateCompanySchema.safeParse(body);
@@ -45,12 +46,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     if (update.data.name) {
       const dup = await pool.request()
         .input("name", sql.NVarChar, update.data.name)
-        .input("id",   sql.Int,      parsed.data.id)
+        .input("id",   sql.Int,      id)
         .query("SELECT id FROM companies WHERE name = @name AND id <> @id AND is_active = 1");
       if (dup.recordset.length > 0) return apiError("Bu firma adı zaten kayıtlı", 409);
     }
 
-    const req = pool.request().input("id", sql.Int, parsed.data.id);
+    const req = pool.request().input("id", sql.Int, id);
     const sets: string[] = [];
 
     if (update.data.name !== undefined) {
@@ -75,7 +76,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     await req.query(`UPDATE companies SET ${sets.join(", ")} WHERE id = @id`);
 
     const result = await pool.request()
-      .input("id", sql.Int, parsed.data.id)
+      .input("id", sql.Int, id)
       .query(`
         SELECT id, name, description, is_active AS isActive,
                maintenance_start_date AS maintenanceStartDate,
@@ -93,13 +94,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 /** DELETE /api/companies/:id  (soft delete) */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = getIdParam(await params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();
   const result = await pool.request()
-    .input("id", sql.Int, parsed.data.id)
+    .input("id", sql.Int, id)
     .query("UPDATE companies SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
 
   if (!result.recordset[0]?.affected) return apiError("Firma bulunamadı", 404);
