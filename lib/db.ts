@@ -30,6 +30,17 @@ async function getPool(): Promise<sql.ConnectionPool> {
   const pool = new sql.ConnectionPool(config);
   await pool.connect();
 
+  // Otomatik şema güncellemeleri (idempotent)
+  try {
+    await pool.request().query(`
+      IF OBJECT_ID('computers','U') IS NOT NULL AND
+         NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('computers') AND name = 'device_type')
+        ALTER TABLE computers ADD device_type NVARCHAR(20) NOT NULL DEFAULT 'COMPUTER';
+    `);
+  } catch {
+    // Hata olursa sessizce geç — tablo henüz oluşturulmamış olabilir
+  }
+
   if (process.env.NODE_ENV !== "production") {
     global._mssqlPool = pool;
   }
