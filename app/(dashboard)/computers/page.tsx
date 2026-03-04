@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { CreateComputerSchema, type CreateComputerInput } from "@/lib/validations/computer";
-import { formatDate, DEVICE_TYPES } from "@/lib/utils";
+import { formatDate, DEVICE_TYPES, CONNECTION_TOOLS, getToolLabel } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +61,14 @@ interface Computer {
 }
 
 interface Company { id: number; name: string }
+
+interface ConnRow {
+  id?: number;      // undefined = yeni bağlantı, number = mevcut
+  tool: string;
+  remoteId: string;
+  password: string;
+  _delete: boolean; // sadece mevcut bağlantılar için
+}
 
 // ─── Device type helpers ──────────────────────────────────────────────────────
 
@@ -81,10 +89,12 @@ function DeviceTypeBadge({ type }: { type: string }) {
 function ComputerForm({
   item,
   companies,
+  initConnections = [],
   onSuccess,
 }: {
   item: Computer | null;
   companies: Company[];
+  initConnections?: ConnRow[];
   onSuccess: () => void;
 }) {
   const form = useForm<CreateComputerInput>({
@@ -97,10 +107,37 @@ function ComputerForm({
     },
   });
 
+  // Bağlantı satırları (mevcut + yeni)
+  const [connRows, setConnRows] = useState<ConnRow[]>(initConnections);
+
+  // Yeni bağlantı giriş alanları
+  const [newTool, setNewTool]     = useState("RUSTDESK");
+  const [newRemoteId, setNewRemoteId] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
+  function addConnRow() {
+    if (!newRemoteId.trim()) return;
+    setConnRows((prev) => [
+      ...prev,
+      { tool: newTool, remoteId: newRemoteId.trim(), password: newPassword, _delete: false },
+    ]);
+    setNewRemoteId("");
+    setNewPassword("");
+  }
+
+  function removeConnRow(idx: number) {
+    setConnRows((prev) =>
+      prev[idx].id
+        ? prev.map((r, i) => (i === idx ? { ...r, _delete: true } : r))
+        : prev.filter((_, i) => i !== idx)
+    );
+  }
+
   async function onSubmit(values: CreateComputerInput) {
     const url    = item ? `/api/computers/${item.id}` : "/api/computers";
     const method = item ? "PATCH" : "POST";
     try {
+      // 1. Bilgisayarı kaydet
       const res  = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -108,12 +145,42 @@ function ComputerForm({
       });
       const json = await res.json();
       if (!res.ok) { toast.error(json.error ?? "Hata"); return; }
+
+      const computerId = item?.id ?? json.data.id;
+
+      // 2. Silinen mevcut bağlantıları sil
+      const toDelete = connRows.filter((r) => r._delete && r.id);
+      await Promise.all(
+        toDelete.map((r) => fetch(`/api/connections/${r.id}`, { method: "DELETE" }))
+      );
+
+      // 3. Yeni bağlantıları oluştur
+      const toCreate = connRows.filter((r) => !r.id && !r._delete && r.remoteId);
+      await Promise.all(
+        toCreate.map((r) =>
+          fetch("/api/connections", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name:      `${values.name} — ${getToolLabel(r.tool)}`,
+              tool:      r.tool,
+              remoteId:  r.remoteId,
+              password:  r.password || undefined,
+              companyId: values.companyId,
+              computerId,
+            }),
+          })
+        )
+      );
+
       toast.success(item ? "Cihaz güncellendi" : "Cihaz oluşturuldu");
       onSuccess();
     } catch {
       toast.error("Sunucuya ulaşılamadı");
     }
   }
+
+  const visibleRows = connRows.filter((r) => !r._delete);
 
   return (
     <Form {...form}>
@@ -199,7 +266,7 @@ function ComputerForm({
               <FormControl>
                 <Textarea
                   placeholder="Cihaz hakkında notlar..."
-                  rows={3}
+                  rows={2}
                   {...field}
                   value={field.value ?? ""}
                 />
@@ -209,7 +276,99 @@ function ComputerForm({
           )}
         />
 
-        <div className="flex justify-end pt-2">
+        {/* ─── Uzak Erişim Bağlantıları ─── */}
+        <div className="space-y-2 pt-1">
+          <div className="border-t pt-3">
+            <p className="text-sm font-medium mb-2">Uzak Erişim Bağlantıları</p>
+
+            {/* Mevcut / eklenmiş satırlar */}
+            {visibleRows.length > 0 && (
+              <div className="space-y-1.5 mb-2">
+                {connRows.map((row, idx) =>
+                  row._delete ? null : (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm bg-muted/30"
+                    >
+                      <Badge variant="secondary" className="text-xs shrink-0 font-normal">
+                        {getToolLabel(row.tool)}
+                      </Badge>
+                      <span className="font-mono text-xs flex-1 truncate text-foreground">
+                        {row.remoteId}
+                      </span>
+                      {row.id && (
+                        <span className="text-[10px] text-muted-foreground shrink-0">mevcut</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeConnRow(idx)}
+                        className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+            {/* Yeni bağlantı ekleme satırı */}
+            <div className="flex gap-1.5 items-center">
+              <Select value={newTool} onValueChange={setNewTool}>
+                <SelectTrigger className="w-[108px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONNECTION_TOOLS.map((t) => (
+                    <SelectItem key={t.value} value={t.value} className="text-xs">
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Input
+                className="h-8 text-xs flex-1 min-w-0"
+                placeholder="Bağlantı No / ID"
+                value={newRemoteId}
+                onChange={(e) => setNewRemoteId(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); addConnRow(); }
+                }}
+              />
+
+              <Input
+                className="h-8 text-xs w-24"
+                placeholder="Şifre"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); addConnRow(); }
+                }}
+              />
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-8 px-2 shrink-0"
+                disabled={!newRemoteId.trim()}
+                onClick={addConnRow}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
+            {visibleRows.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Bağlantı numarasını girin ve + ile ekleyin.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? "Kaydediliyor..." : item ? "Güncelle" : "Oluştur"}
           </Button>
@@ -235,6 +394,7 @@ export default function ComputersPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingComputer, setEditingComputer] = useState<Computer | null>(null);
+  const [editingConnections, setEditingConnections] = useState<ConnRow[]>([]);
 
   const fetchComputers = useCallback(async () => {
     setLoading(true);
@@ -242,9 +402,9 @@ export default function ComputersPage() {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(pageSize),
-        ...(search !== ""          ? { search }                        : {}),
-        ...(companyFilter    !== "ALL" ? { companyId: companyFilter }    : {}),
-        ...(deviceTypeFilter !== "ALL" ? { deviceType: deviceTypeFilter } : {}),
+        ...(search            !== ""    ? { search }                        : {}),
+        ...(companyFilter    !== "ALL" ? { companyId: companyFilter }       : {}),
+        ...(deviceTypeFilter !== "ALL" ? { deviceType: deviceTypeFilter }   : {}),
       });
       const res  = await fetch(`/api/computers?${params}`);
       const json = await res.json();
@@ -268,11 +428,32 @@ export default function ComputersPage() {
 
   function openCreate() {
     setEditingComputer(null);
+    setEditingConnections([]);
     setDialogOpen(true);
   }
 
-  function openEdit(computer: Computer) {
+  async function openEdit(computer: Computer) {
     setEditingComputer(computer);
+    try {
+      const res  = await fetch(`/api/connections?computerId=${computer.id}&pageSize=100`);
+      const json = await res.json();
+      if (json.success) {
+        setEditingConnections(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          json.data.items.map((c: any) => ({
+            id:       c.id,
+            tool:     c.tool,
+            remoteId: c.remoteId,
+            password: "",
+            _delete:  false,
+          }))
+        );
+      } else {
+        setEditingConnections([]);
+      }
+    } catch {
+      setEditingConnections([]);
+    }
     setDialogOpen(true);
   }
 
@@ -459,7 +640,7 @@ export default function ComputersPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingComputer ? "Cihazı Düzenle" : "Yeni Cihaz"}
@@ -469,6 +650,7 @@ export default function ComputersPage() {
             key={dialogOpen ? (editingComputer?.id ?? "new") : undefined}
             item={editingComputer}
             companies={companies}
+            initConnections={editingConnections}
             onSuccess={() => {
               setDialogOpen(false);
               fetchComputers();
