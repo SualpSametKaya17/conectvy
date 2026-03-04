@@ -1,11 +1,14 @@
 import { z } from "zod";
 
+export const DeviceTypeEnum = z.enum(["COMPUTER", "SERVER", "VIRTUAL_SERVER"]);
+
 export const CreateComputerSchema = z.object({
+  deviceType: DeviceTypeEnum.default("COMPUTER"),
   companyId: z.coerce.number().int().positive("Firma seçimi zorunludur"),
   name: z
     .string()
-    .min(1, "Bilgisayar adı zorunludur")
-    .max(255, "Bilgisayar adı en fazla 255 karakter olabilir"),
+    .min(1, "Cihaz adı zorunludur")
+    .max(255, "Cihaz adı en fazla 255 karakter olabilir"),
   description: z
     .string()
     .max(1000, "Açıklama en fazla 1000 karakter olabilir")
@@ -22,6 +25,7 @@ export const ComputerIdSchema = z.object({
 export const ComputerQuerySchema = z.object({
   search: z.string().optional(),
   companyId: z.coerce.number().int().positive().optional(),
+  deviceType: DeviceTypeEnum.optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });

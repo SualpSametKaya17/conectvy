@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,18 +46,37 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { CreateComputerSchema, type CreateComputerInput } from "@/lib/validations/computer";
-import { formatDate } from "@/lib/utils";
+import { formatDate, DEVICE_TYPES } from "@/lib/utils";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Computer {
   id: number;
+  deviceType: string;
   name: string;
   description: string | null;
   company: { id: number; name: string };
-  _count: { connections: number };
+  _count: { connections: number; rustdesk: number; anydesk: number };
   updatedAt: string;
 }
 
 interface Company { id: number; name: string }
+
+// ─── Device type helpers ──────────────────────────────────────────────────────
+
+function DeviceIcon({ type, className }: { type: string; className?: string }) {
+  if (type === "SERVER")         return <Server  className={className} />;
+  if (type === "VIRTUAL_SERVER") return <Cloud   className={className} />;
+  return                                <Monitor className={className} />;
+}
+
+function DeviceTypeBadge({ type }: { type: string }) {
+  const label   = DEVICE_TYPES.find((t) => t.value === type)?.label ?? type;
+  const variant = type === "SERVER" ? "default" : type === "VIRTUAL_SERVER" ? "outline" : "secondary";
+  return <Badge variant={variant as "default" | "secondary" | "outline"}>{label}</Badge>;
+}
+
+// ─── ComputerForm ─────────────────────────────────────────────────────────────
 
 function ComputerForm({
   item,
@@ -71,24 +90,25 @@ function ComputerForm({
   const form = useForm<CreateComputerInput>({
     resolver: zodResolver(CreateComputerSchema),
     defaultValues: {
-      companyId: item?.company.id ?? 0,
-      name: item?.name ?? "",
+      deviceType:  (item?.deviceType as CreateComputerInput["deviceType"]) ?? "COMPUTER",
+      companyId:   item?.company.id ?? 0,
+      name:        item?.name ?? "",
       description: item?.description ?? "",
     },
   });
 
   async function onSubmit(values: CreateComputerInput) {
-    const url = item ? `/api/computers/${item.id}` : "/api/computers";
+    const url    = item ? `/api/computers/${item.id}` : "/api/computers";
     const method = item ? "PATCH" : "POST";
     try {
-      const res = await fetch(url, {
+      const res  = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
       const json = await res.json();
       if (!res.ok) { toast.error(json.error ?? "Hata"); return; }
-      toast.success(item ? "Bilgisayar güncellendi" : "Bilgisayar oluşturuldu");
+      toast.success(item ? "Cihaz güncellendi" : "Cihaz oluşturuldu");
       onSuccess();
     } catch {
       toast.error("Sunucuya ulaşılamadı");
@@ -98,6 +118,32 @@ function ComputerForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+
+        {/* Cihaz Türü */}
+        <FormField
+          control={form.control}
+          name="deviceType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Cihaz Türü *</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tür seç..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {DEVICE_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Firma */}
         <FormField
           control={form.control}
           name="companyId"
@@ -114,30 +160,36 @@ function ComputerForm({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {companies.map((c) => (
-                    <SelectItem key={c.id} value={c.id.toString()}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
+                  {companies.length === 0 ? (
+                    <SelectItem value="__loading" disabled>Yükleniyor...</SelectItem>
+                  ) : (
+                    companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {/* Cihaz Adı */}
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Bilgisayar Adı *</FormLabel>
+              <FormLabel>Cihaz Adı *</FormLabel>
               <FormControl>
-                <Input placeholder="Resepsiyon PC, Sunucu 1..." {...field} />
+                <Input placeholder="Resepsiyon PC, Web Sunucu 1..." {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {/* Açıklama */}
         <FormField
           control={form.control}
           name="description"
@@ -146,7 +198,7 @@ function ComputerForm({
               <FormLabel>Açıklama</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="Bilgisayar hakkında notlar..."
+                  placeholder="Cihaz hakkında notlar..."
                   rows={3}
                   {...field}
                   value={field.value ?? ""}
@@ -156,6 +208,7 @@ function ComputerForm({
             </FormItem>
           )}
         />
+
         <div className="flex justify-end pt-2">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? "Kaydediliyor..." : item ? "Güncelle" : "Oluştur"}
@@ -166,6 +219,8 @@ function ComputerForm({
   );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ComputersPage() {
   const [computers, setComputers] = useState<Computer[]>([]);
   const [total, setTotal] = useState(0);
@@ -174,6 +229,7 @@ export default function ComputersPage() {
 
   const [search, setSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState<string>("ALL");
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState<string>("ALL");
   const [loading, setLoading] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
 
@@ -186,10 +242,11 @@ export default function ComputersPage() {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(pageSize),
-        ...(search ? { search } : {}),
-        ...(companyFilter !== "ALL" ? { companyId: companyFilter } : {}),
+        ...(search !== ""          ? { search }                        : {}),
+        ...(companyFilter    !== "ALL" ? { companyId: companyFilter }    : {}),
+        ...(deviceTypeFilter !== "ALL" ? { deviceType: deviceTypeFilter } : {}),
       });
-      const res = await fetch(`/api/computers?${params}`);
+      const res  = await fetch(`/api/computers?${params}`);
       const json = await res.json();
       if (json.success) {
         setComputers(json.data.items);
@@ -198,10 +255,10 @@ export default function ComputersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, companyFilter]);
+  }, [page, search, companyFilter, deviceTypeFilter]);
 
   const fetchCompanies = useCallback(async () => {
-    const res = await fetch("/api/companies?pageSize=200");
+    const res  = await fetch("/api/companies?pageSize=200");
     const json = await res.json();
     if (json.success) setCompanies(json.data.items);
   }, []);
@@ -220,11 +277,11 @@ export default function ComputersPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm("Bu bilgisayarı silmek istediğinize emin misiniz?")) return;
-    const res = await fetch(`/api/computers/${id}`, { method: "DELETE" });
+    if (!confirm("Bu cihazı silmek istediğinize emin misiniz?")) return;
+    const res  = await fetch(`/api/computers/${id}`, { method: "DELETE" });
     const json = await res.json();
     if (json.success) {
-      toast.success("Bilgisayar silindi");
+      toast.success("Cihaz silindi");
       fetchComputers();
     } else {
       toast.error(json.error ?? "Silinemedi");
@@ -235,12 +292,13 @@ export default function ComputersPage() {
 
   return (
     <div className="space-y-4">
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Bilgisayar veya firma ara..."
+            placeholder="Cihaz veya firma ara..."
             className="pl-9"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -248,7 +306,7 @@ export default function ComputersPage() {
         </div>
 
         <Select value={companyFilter} onValueChange={(v) => { setCompanyFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="Firma" />
           </SelectTrigger>
           <SelectContent>
@@ -259,9 +317,21 @@ export default function ComputersPage() {
           </SelectContent>
         </Select>
 
+        <Select value={deviceTypeFilter} onValueChange={(v) => { setDeviceTypeFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-[155px]">
+            <SelectValue placeholder="Cihaz Türü" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Tüm Türler</SelectItem>
+            {DEVICE_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Yeni Bilgisayar
+          Yeni Cihaz
         </Button>
       </div>
 
@@ -270,10 +340,11 @@ export default function ComputersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Bilgisayar</TableHead>
+              <TableHead>Cihaz</TableHead>
+              <TableHead>Tür</TableHead>
               <TableHead>Firma</TableHead>
+              <TableHead>Bağlantılar</TableHead>
               <TableHead>Açıklama</TableHead>
-              <TableHead>Uzak Erişim</TableHead>
               <TableHead>Güncelleme</TableHead>
               <TableHead className="w-10" />
             </TableRow>
@@ -281,14 +352,14 @@ export default function ComputersPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
                   Yükleniyor...
                 </TableCell>
               </TableRow>
             ) : computers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
-                  Bilgisayar bulunamadı.
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+                  Cihaz bulunamadı.
                 </TableCell>
               </TableRow>
             ) : (
@@ -296,18 +367,36 @@ export default function ComputersPage() {
                 <TableRow key={computer.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Monitor className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <DeviceIcon
+                        type={computer.deviceType}
+                        className="h-4 w-4 text-muted-foreground shrink-0"
+                      />
                       <span className="font-medium">{computer.name}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{computer.company.name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                    {computer.description ?? "—"}
-                  </TableCell>
                   <TableCell>
-                    <Badge variant={computer._count.connections > 0 ? "secondary" : "outline"}>
-                      {computer._count.connections} bağlantı
-                    </Badge>
+                    <DeviceTypeBadge type={computer.deviceType} />
+                  </TableCell>
+                  <TableCell className="text-sm">{computer.company.name}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {computer._count.rustdesk > 0 && (
+                        <Badge variant="secondary" className="text-xs font-normal">
+                          RustDesk{computer._count.rustdesk > 1 ? ` ×${computer._count.rustdesk}` : ""}
+                        </Badge>
+                      )}
+                      {computer._count.anydesk > 0 && (
+                        <Badge variant="secondary" className="text-xs font-normal">
+                          AnyDesk{computer._count.anydesk > 1 ? ` ×${computer._count.anydesk}` : ""}
+                        </Badge>
+                      )}
+                      {computer._count.connections === 0 && (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">
+                    {computer.description ?? "—"}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {formatDate(computer.updatedAt)}
@@ -355,9 +444,7 @@ export default function ComputersPage() {
             >
               Önceki
             </Button>
-            <span className="flex items-center px-2">
-              {page} / {totalPages}
-            </span>
+            <span className="flex items-center px-2">{page} / {totalPages}</span>
             <Button
               variant="outline"
               size="sm"
@@ -375,7 +462,7 @@ export default function ComputersPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingComputer ? "Bilgisayarı Düzenle" : "Yeni Bilgisayar"}
+              {editingComputer ? "Cihazı Düzenle" : "Yeni Cihaz"}
             </DialogTitle>
           </DialogHeader>
           <ComputerForm

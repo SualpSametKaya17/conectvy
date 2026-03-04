@@ -48,3 +48,16 @@ export type ConnectionTool = (typeof CONNECTION_TOOLS)[number]["value"];
 export function getToolLabel(tool: string): string {
   return CONNECTION_TOOLS.find((t) => t.value === tool)?.label ?? tool;
 }
+
+// ─── Device type display ──────────────────────────────────────────────────────
+export const DEVICE_TYPES = [
+  { value: "COMPUTER", label: "Bilgisayar" },
+  { value: "SERVER", label: "Sunucu" },
+  { value: "VIRTUAL_SERVER", label: "Sanal Sunucu" },
+] as const;
+
+export type DeviceType = (typeof DEVICE_TYPES)[number]["value"];
+
+export function getDeviceTypeLabel(type: string): string {
+  return DEVICE_TYPES.find((t) => t.value === type)?.label ?? type;
+}
