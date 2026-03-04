@@ -44,7 +44,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   const body   = await request.json();
   const update = UpdateComputerSchema.safeParse(body);
-  if (!update.success) return apiValidationError(update.error);
+  if (!update.success) {
+    console.error("[PATCH /api/computers/:id] Validation error:", JSON.stringify(update.error.flatten()));
+    return apiValidationError(update.error);
+  }
 
   try {
     const pool = await getPool();

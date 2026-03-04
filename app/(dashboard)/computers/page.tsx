@@ -231,7 +231,13 @@ function ComputerForm({
         body: JSON.stringify(values),
       });
       const json = await res.json();
-      if (!res.ok) { toast.error(json.error ?? "Hata"); return; }
+      if (!res.ok) {
+        const detail = json.details?.fieldErrors
+          ? Object.entries(json.details.fieldErrors).map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`).join(" | ")
+          : "";
+        toast.error(`${json.error ?? "Hata"}${detail ? ` — ${detail}` : ""}`);
+        return;
+      }
 
       const computerId = item?.id ?? json.data.id;
 
