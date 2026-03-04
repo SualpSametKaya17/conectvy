@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud, X } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud, X, Copy, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +82,93 @@ function DeviceTypeBadge({ type }: { type: string }) {
   const label   = DEVICE_TYPES.find((t) => t.value === type)?.label ?? type;
   const variant = type === "SERVER" ? "default" : type === "VIRTUAL_SERVER" ? "outline" : "secondary";
   return <Badge variant={variant as "default" | "secondary" | "outline"}>{label}</Badge>;
+}
+
+// ─── ConnectionsBadges: tıkla → Remote ID listesi + kopyala ──────────────────
+
+interface ConnSummary { id: number; tool: string; remoteId: string; name: string }
+
+function ConnectionsBadges({
+  computerId,
+  rustdesk,
+  anydesk,
+  total,
+}: {
+  computerId: number;
+  rustdesk: number;
+  anydesk: number;
+  total: number;
+}) {
+  const [open, setOpen]             = useState(false);
+  const [conns, setConns]           = useState<ConnSummary[] | null>(null);
+  const [fetching, setFetching]     = useState(false);
+
+  async function load() {
+    if (conns) return;
+    setFetching(true);
+    try {
+      const res  = await fetch(`/api/connections?computerId=${computerId}&pageSize=50`);
+      const json = await res.json();
+      if (json.success) setConns(json.data.items);
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  function copy(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} kopyalandı`);
+  }
+
+  if (total === 0) return <span className="text-xs text-muted-foreground">—</span>;
+
+  return (
+    <DropdownMenu open={open} onOpenChange={(v) => { setOpen(v); if (v) load(); }}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1 flex-wrap focus:outline-none">
+          {rustdesk > 0 && (
+            <Badge variant="secondary" className="text-xs font-normal cursor-pointer hover:bg-secondary/80">
+              RustDesk{rustdesk > 1 ? ` ×${rustdesk}` : ""}
+            </Badge>
+          )}
+          {anydesk > 0 && (
+            <Badge variant="secondary" className="text-xs font-normal cursor-pointer hover:bg-secondary/80">
+              AnyDesk{anydesk > 1 ? ` ×${anydesk}` : ""}
+            </Badge>
+          )}
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72 p-1">
+        {fetching ? (
+          <div className="px-3 py-2 text-xs text-muted-foreground">Yükleniyor...</div>
+        ) : conns?.length === 0 ? (
+          <div className="px-3 py-2 text-xs text-muted-foreground">Bağlantı yok.</div>
+        ) : (
+          conns?.map((conn) => (
+            <div
+              key={conn.id}
+              className="flex items-center justify-between gap-2 rounded-sm px-2 py-1.5 hover:bg-accent"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Badge variant="secondary" className="text-[10px] font-normal shrink-0 px-1.5 py-0">
+                  {getToolLabel(conn.tool)}
+                </Badge>
+                <span className="font-mono text-xs truncate">{conn.remoteId}</span>
+              </div>
+              <button
+                onClick={() => copy(conn.remoteId, conn.remoteId)}
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                title="Kopyala"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 // ─── ComputerForm ─────────────────────────────────────────────────────────────
@@ -560,21 +647,12 @@ export default function ComputersPage() {
                   </TableCell>
                   <TableCell className="text-sm">{computer.company.name}</TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {computer._count.rustdesk > 0 && (
-                        <Badge variant="secondary" className="text-xs font-normal">
-                          RustDesk{computer._count.rustdesk > 1 ? ` ×${computer._count.rustdesk}` : ""}
-                        </Badge>
-                      )}
-                      {computer._count.anydesk > 0 && (
-                        <Badge variant="secondary" className="text-xs font-normal">
-                          AnyDesk{computer._count.anydesk > 1 ? ` ×${computer._count.anydesk}` : ""}
-                        </Badge>
-                      )}
-                      {computer._count.connections === 0 && (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </div>
+                    <ConnectionsBadges
+                      computerId={computer.id}
+                      rustdesk={computer._count.rustdesk}
+                      anydesk={computer._count.anydesk}
+                      total={computer._count.connections}
+                    />
                   </TableCell>
                   <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[180px] truncate">
                     {computer.description ?? "—"}
