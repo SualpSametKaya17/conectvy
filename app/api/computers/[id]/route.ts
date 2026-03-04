@@ -40,9 +40,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 /** PATCH /api/computers/:id */
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+  if (!parsed.success) {
+    console.error("[PATCH /api/computers/:id] ID parse error:", JSON.stringify(parsed.error.flatten()), "params:", params);
+    return apiValidationError(parsed.error);
+  }
 
   const body   = await request.json();
+  console.log("[PATCH /api/computers/:id] Body:", JSON.stringify(body));
   const update = UpdateComputerSchema.safeParse(body);
   if (!update.success) {
     console.error("[PATCH /api/computers/:id] Validation error:", JSON.stringify(update.error.flatten()));
