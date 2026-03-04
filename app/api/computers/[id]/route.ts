@@ -1,19 +1,20 @@
 import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
-import { UpdateComputerSchema, ComputerIdSchema } from "@/lib/validations/computer";
+import { UpdateComputerSchema } from "@/lib/validations/computer";
 
-function parseId(params: { id: string }) {
-  return ComputerIdSchema.safeParse(params);
+function getIdParam(params: { id: string }): number | null {
+  const n = parseInt(params.id, 10);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 /** GET /api/computers/:id */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+  const id = getIdParam(params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();
   const result = await pool.request()
-    .input("id", sql.Int, parsed.data.id)
+    .input("id", sql.Int, id)
     .query(`
       SELECT co.id, co.device_type AS deviceType,
              co.company_id AS companyId, comp.name AS companyName,
@@ -39,24 +40,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 /** PATCH /api/computers/:id */
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) {
-    console.error("[PATCH /api/computers/:id] ID parse error:", JSON.stringify(parsed.error.flatten()), "params:", params);
-    return apiValidationError(parsed.error);
-  }
+  const id = getIdParam(params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const body   = await request.json();
-  console.log("[PATCH /api/computers/:id] Body:", JSON.stringify(body));
   const update = UpdateComputerSchema.safeParse(body);
-  if (!update.success) {
-    console.error("[PATCH /api/computers/:id] Validation error:", JSON.stringify(update.error.flatten()));
-    return apiValidationError(update.error);
-  }
+  if (!update.success) return apiValidationError(update.error);
 
   try {
     const pool = await getPool();
     const sets: string[] = [];
-    const req = pool.request().input("id", sql.Int, parsed.data.id);
+    const req = pool.request().input("id", sql.Int, id);
 
     if (update.data.deviceType  !== undefined) { sets.push("device_type = @deviceType");   req.input("deviceType",  sql.NVarChar, update.data.deviceType); }
     if (update.data.companyId   !== undefined) { sets.push("company_id = @companyId");     req.input("companyId",   sql.Int,      update.data.companyId); }
@@ -68,7 +62,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     await req.query(`UPDATE computers SET ${sets.join(", ")} WHERE id = @id AND is_active = 1`);
 
     const updated = await pool.request()
-      .input("id", sql.Int, parsed.data.id)
+      .input("id", sql.Int, id)
       .query(`
         SELECT co.id, co.device_type AS deviceType,
                co.company_id AS companyId, comp.name AS companyName,
@@ -91,12 +85,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
 /** DELETE /api/computers/:id  (soft delete) */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const parsed = parseId(params);
-  if (!parsed.success) return apiValidationError(parsed.error);
+  const id = getIdParam(params);
+  if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
   const pool   = await getPool();
   const result = await pool.request()
-    .input("id", sql.Int, parsed.data.id)
+    .input("id", sql.Int, id)
     .query("UPDATE computers SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
 
   if (!result.recordset[0]?.affected) return apiError("Cihaz bulunamadı", 404);
