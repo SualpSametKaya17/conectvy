@@ -202,6 +202,7 @@ export default function CompaniesPage() {
         {
           key: "description",
           header: "Açıklama",
+          className: "hidden md:table-cell",
           render: (r) => (
             <span className="text-sm text-muted-foreground line-clamp-1">{r.description ?? "—"}</span>
           ),
@@ -209,21 +210,25 @@ export default function CompaniesPage() {
         {
           key: "maintenance",
           header: "Bakım Desteği",
+          className: "hidden sm:table-cell",
           render: (r) => <MaintenanceBadge endDate={r.maintenanceEndDate} />,
         },
         {
           key: "computers",
           header: "Bilgisayar",
+          className: "hidden sm:table-cell",
           render: (r) => <Badge variant="secondary">{r._count.computers}</Badge>,
         },
         {
           key: "connections",
           header: "Bağlantı",
+          className: "hidden sm:table-cell",
           render: (r) => <Badge variant="secondary">{r._count.connections}</Badge>,
         },
         {
           key: "regions",
           header: "Bölge",
+          className: "hidden md:table-cell",
           render: (r) => <Badge variant="outline">{r._count.regions}</Badge>,
         },
       ]}

@@ -191,6 +191,7 @@ export default function RegionsPage() {
         {
           key: "company",
           header: "Firma",
+          className: "hidden sm:table-cell",
           render: (r) =>
             r.company ? (
               <Badge variant="outline">{r.company.name}</Badge>
@@ -201,6 +202,7 @@ export default function RegionsPage() {
         {
           key: "description",
           header: "Açıklama",
+          className: "hidden md:table-cell",
           render: (r) => (
             <span className="text-sm text-muted-foreground line-clamp-1">{r.description ?? "—"}</span>
           ),
@@ -208,6 +210,7 @@ export default function RegionsPage() {
         {
           key: "connections",
           header: "Bağlantı",
+          className: "hidden sm:table-cell",
           render: (r) => <Badge variant="secondary">{r._count.connections}</Badge>,
         },
       ]}

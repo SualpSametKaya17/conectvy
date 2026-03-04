@@ -517,16 +517,16 @@ export default function ComputersPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-md border bg-card">
+      <div className="rounded-md border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Cihaz</TableHead>
-              <TableHead>Tür</TableHead>
+              <TableHead className="hidden sm:table-cell">Tür</TableHead>
               <TableHead>Firma</TableHead>
-              <TableHead>Bağlantılar</TableHead>
-              <TableHead>Açıklama</TableHead>
-              <TableHead>Güncelleme</TableHead>
+              <TableHead className="hidden sm:table-cell">Bağlantılar</TableHead>
+              <TableHead className="hidden lg:table-cell">Açıklama</TableHead>
+              <TableHead className="hidden lg:table-cell">Güncelleme</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -555,11 +555,11 @@ export default function ComputersPage() {
                       <span className="font-medium">{computer.name}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <DeviceTypeBadge type={computer.deviceType} />
                   </TableCell>
                   <TableCell className="text-sm">{computer.company.name}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <div className="flex items-center gap-1 flex-wrap">
                       {computer._count.rustdesk > 0 && (
                         <Badge variant="secondary" className="text-xs font-normal">
@@ -576,10 +576,10 @@ export default function ComputersPage() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">
+                  <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[180px] truncate">
                     {computer.description ?? "—"}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                     {formatDate(computer.updatedAt)}
                   </TableCell>
                   <TableCell>

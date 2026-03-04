@@ -36,6 +36,7 @@ export interface Column<T> {
   key: keyof T | string;
   header: string;
   render?: (row: T) => React.ReactNode;
+  className?: string; // responsive: "hidden sm:table-cell" vb.
 }
 
 interface Props<T extends { id: number }> {
@@ -111,12 +112,12 @@ export function CrudTable<T extends { id: number }>({
       </div>
 
       {/* Table */}
-      <div className="rounded-md border bg-card">
+      <div className="rounded-md border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               {columns.map((col) => (
-                <TableHead key={String(col.key)}>{col.header}</TableHead>
+                <TableHead key={String(col.key)} className={col.className}>{col.header}</TableHead>
               ))}
               <TableHead className="w-10" />
             </TableRow>
@@ -144,7 +145,7 @@ export function CrudTable<T extends { id: number }>({
               rows.map((row) => (
                 <TableRow key={row.id}>
                   {columns.map((col) => (
-                    <TableCell key={String(col.key)}>
+                    <TableCell key={String(col.key)} className={col.className}>
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[col.key as string] ?? "—")}
@@ -198,7 +199,7 @@ export function CrudTable<T extends { id: number }>({
 
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full max-w-lg">
           <DialogHeader>
             <DialogTitle>{editItem ? `${title} Düzenle` : `Yeni ${title}`}</DialogTitle>
           </DialogHeader>

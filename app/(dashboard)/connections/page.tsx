@@ -225,18 +225,18 @@ export default function ConnectionsPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-md border bg-card">
+      <div className="rounded-md border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Ad</TableHead>
               <TableHead>Araç</TableHead>
               <TableHead>Remote ID</TableHead>
-              <TableHead>Şifre</TableHead>
-              <TableHead>Bilgisayar</TableHead>
-              <TableHead>Firma</TableHead>
-              <TableHead>Bölge</TableHead>
-              <TableHead>Güncelleme</TableHead>
+              <TableHead className="hidden sm:table-cell">Şifre</TableHead>
+              <TableHead className="hidden md:table-cell">Bilgisayar</TableHead>
+              <TableHead className="hidden md:table-cell">Firma</TableHead>
+              <TableHead className="hidden lg:table-cell">Bölge</TableHead>
+              <TableHead className="hidden lg:table-cell">Güncelleme</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -275,7 +275,7 @@ export default function ConnectionsPage() {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <div className="flex items-center gap-1">
                       <span className="font-mono text-sm">
                         {visiblePassId === conn.id ? (passwords[conn.id] || "—") : "••••••"}
@@ -292,10 +292,10 @@ export default function ConnectionsPage() {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{conn.computer?.name ?? "—"}</TableCell>
-                  <TableCell className="text-sm">{conn.company?.name ?? "—"}</TableCell>
-                  <TableCell className="text-sm">{conn.region?.name ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="hidden md:table-cell text-sm">{conn.computer?.name ?? "—"}</TableCell>
+                  <TableCell className="hidden md:table-cell text-sm">{conn.company?.name ?? "—"}</TableCell>
+                  <TableCell className="hidden lg:table-cell text-sm">{conn.region?.name ?? "—"}</TableCell>
+                  <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                     {formatDate(conn.updatedAt)}
                   </TableCell>
                   <TableCell>
@@ -358,7 +358,7 @@ export default function ConnectionsPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingConnection ? "Bağlantıyı Düzenle" : "Yeni Bağlantı"}
