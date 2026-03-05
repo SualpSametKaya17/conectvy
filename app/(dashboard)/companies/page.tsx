@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -30,11 +30,13 @@ interface Company {
 
 function getMaintenanceStatus(endDate: string | null): "active" | "expiring" | "expired" | "none" {
   if (!endDate) return "none";
+  // Her iki tarihi de yerel gece yarısına normalize et; UTC/yerel saat farkından kaynaklanan
+  // yuvarlama hatalarını önler (ör. UTC+3'te 30 günlük tarih yanlış "Aktif" gösteriyordu).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
+  const end = new Date(endDate.substring(0, 10) + "T00:00:00"); // yerel gece yarısı
   if (end < today) return "expired";
-  const daysLeft = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const daysLeft = Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   return daysLeft <= 30 ? "expiring" : "active";
 }
 
@@ -53,6 +55,7 @@ function CompanyForm({
   item: Company | null;
   onSuccess: () => void;
 }) {
+  const itemRef = useRef(item);
   const form = useForm<CreateCompanyInput>({
     resolver: zodResolver(CreateCompanySchema),
     defaultValues: {
@@ -66,6 +69,24 @@ function CompanyForm({
         : "",
     },
   });
+
+  // item prop değiştiğinde (farklı firma açılınca) formu sıfırla
+  useEffect(() => {
+    if (itemRef.current?.id !== item?.id) {
+      itemRef.current = item;
+      form.reset({
+        name: item?.name ?? "",
+        description: item?.description ?? "",
+        maintenanceStartDate: item?.maintenanceStartDate
+          ? item.maintenanceStartDate.substring(0, 10)
+          : "",
+        maintenanceEndDate: item?.maintenanceEndDate
+          ? item.maintenanceEndDate.substring(0, 10)
+          : "",
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item]);
 
   async function onSubmit(values: CreateCompanyInput) {
     const url = item ? `/api/companies/${item.id}` : "/api/companies";
