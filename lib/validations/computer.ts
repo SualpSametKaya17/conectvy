@@ -27,7 +27,7 @@ export const ComputerQuerySchema = z.object({
   companyId: z.coerce.number().int().positive().optional(),
   deviceType: DeviceTypeEnum.optional(),
   page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  pageSize: z.coerce.number().int().min(1).max(5000).default(20),
 });
 
 export type CreateComputerInput = z.infer<typeof CreateComputerSchema>;
