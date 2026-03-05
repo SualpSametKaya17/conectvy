@@ -182,8 +182,8 @@ export default function DashboardPage() {
         </Card>
 
         {/* Bakım Sözleşmesi Uyarıları */}
-        <Card className="border-orange-300 dark:border-orange-800">
-          <CardHeader className="pb-2">
+        <Card className="border-orange-300 dark:border-orange-800 flex flex-col">
+          <CardHeader className="pb-2 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2 text-orange-600 dark:text-orange-400">
                 <AlertTriangle className="h-4 w-4" />
@@ -201,13 +201,13 @@ export default function DashboardPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-hidden min-h-0">
             {loading ? (
               <p className="text-sm text-muted-foreground">Yükleniyor...</p>
             ) : alerts.length === 0 ? (
               <p className="text-sm text-muted-foreground">Yaklaşan uyarı yok.</p>
             ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <div className="space-y-2 h-full overflow-y-auto pr-1">
                 {alerts.map((a) => (
                   <div
                     key={a.id}
