@@ -22,15 +22,34 @@ export async function GET(request: Request) {
 
     const [items, count] = await Promise.all([
       req.query(`
+        WITH
+          conn_agg AS (
+            SELECT company_id, COUNT(*) AS cnt
+            FROM connections WHERE is_active = 1
+            GROUP BY company_id
+          ),
+          region_agg AS (
+            SELECT company_id, COUNT(*) AS cnt
+            FROM regions
+            GROUP BY company_id
+          ),
+          computer_agg AS (
+            SELECT company_id, COUNT(*) AS cnt
+            FROM computers WHERE is_active = 1
+            GROUP BY company_id
+          )
         SELECT
           c.id, c.name, c.description, c.is_active AS isActive,
           c.maintenance_start_date AS maintenanceStartDate,
           c.maintenance_end_date   AS maintenanceEndDate,
           c.created_at AS createdAt, c.updated_at AS updatedAt,
-          (SELECT COUNT(*) FROM connections cn WHERE cn.company_id = c.id AND cn.is_active = 1) AS connectionCount,
-          (SELECT COUNT(*) FROM regions     r  WHERE r.company_id  = c.id) AS regionCount,
-          (SELECT COUNT(*) FROM computers   co WHERE co.company_id = c.id AND co.is_active = 1) AS computerCount
+          COALESCE(cn.cnt, 0)  AS connectionCount,
+          COALESCE(r.cnt,  0)  AS regionCount,
+          COALESCE(co.cnt, 0)  AS computerCount
         FROM companies c
+        LEFT JOIN conn_agg     cn ON cn.company_id = c.id
+        LEFT JOIN region_agg   r  ON r.company_id  = c.id
+        LEFT JOIN computer_agg co ON co.company_id = c.id
         WHERE c.name LIKE @search AND c.is_active = 1
         ORDER BY c.name
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY

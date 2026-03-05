@@ -31,6 +31,16 @@ export async function GET(request: Request) {
 
     const [items, count] = await Promise.all([
       req.query(`
+        WITH conn_agg AS (
+          SELECT
+            computer_id,
+            COUNT(*)                                             AS total,
+            SUM(CASE WHEN tool = 'RUSTDESK' THEN 1 ELSE 0 END) AS rustdesk,
+            SUM(CASE WHEN tool = 'ANYDESK'  THEN 1 ELSE 0 END) AS anydesk
+          FROM connections
+          WHERE is_active = 1
+          GROUP BY computer_id
+        )
         SELECT
           co.id,
           co.device_type  AS deviceType,
@@ -41,11 +51,12 @@ export async function GET(request: Request) {
           co.is_active    AS isActive,
           co.created_at   AS createdAt,
           co.updated_at   AS updatedAt,
-          (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1)                           AS connectionCount,
-          (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1 AND cn.tool = 'RUSTDESK') AS rustdeskCount,
-          (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1 AND cn.tool = 'ANYDESK')  AS anyDeskCount
+          COALESCE(ca.total,    0) AS connectionCount,
+          COALESCE(ca.rustdesk, 0) AS rustdeskCount,
+          COALESCE(ca.anydesk,  0) AS anyDeskCount
         FROM computers co
         JOIN companies comp ON comp.id = co.company_id
+        LEFT JOIN conn_agg ca ON ca.computer_id = co.id
         WHERE 1=1 ${whereExtra}
         ORDER BY comp.name, co.name
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY

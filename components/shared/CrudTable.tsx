@@ -5,7 +5,7 @@
  * Companies ve Regions sayfalarında yeniden kullanılır.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Plus, Search, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
@@ -76,7 +76,18 @@ export function CrudTable<T extends { id: number }>({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<T | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [inputValue, setInputValue] = useState(search);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const totalPages = Math.ceil(total / pageSize);
+
+  // Dışarıdan search sıfırlanırsa inputu da sıfırla
+  useEffect(() => { setInputValue(search); }, [search]);
+
+  function handleSearchInput(v: string) {
+    setInputValue(v);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => onSearchChange(v), 350);
+  }
 
   async function openEdit(item: T) {
     const data = getEditData ? await getEditData(item) : item;
@@ -102,8 +113,8 @@ export function CrudTable<T extends { id: number }>({
           <Input
             placeholder="Ara..."
             className="pl-9"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
+            value={inputValue}
+            onChange={(e) => handleSearchInput(e.target.value)}
           />
         </div>
         <Button onClick={openCreate}>

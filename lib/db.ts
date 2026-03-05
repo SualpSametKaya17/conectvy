@@ -63,6 +63,41 @@ async function getPool(): Promise<sql.ConnectionPool> {
     // Hata olursa sessizce geç — kolonlar zaten mevcut olabilir
   }
 
+  // ── Performance indexes (idempotent) ─────────────────────────────────────
+  const indexes: [string, string][] = [
+    [
+      "IX_companies_name_active",
+      "CREATE INDEX IX_companies_name_active ON companies(name) WHERE is_active = 1",
+    ],
+    [
+      "IX_regions_company_name",
+      "CREATE INDEX IX_regions_company_name ON regions(company_id, name)",
+    ],
+    [
+      "IX_computers_company_active",
+      "CREATE INDEX IX_computers_company_active ON computers(company_id, name) WHERE is_active = 1",
+    ],
+    [
+      "IX_connections_company_active",
+      "CREATE INDEX IX_connections_company_active ON connections(company_id) WHERE is_active = 1",
+    ],
+    [
+      "IX_connections_computer_active",
+      "CREATE INDEX IX_connections_computer_active ON connections(computer_id, tool) WHERE is_active = 1",
+    ],
+  ];
+
+  for (const [name, ddl] of indexes) {
+    try {
+      await pool.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = '${name}')
+          ${ddl};
+      `);
+    } catch {
+      // İndex zaten varsa veya tablo henüz oluşturulmamışsa sessizce geç
+    }
+  }
+
   if (process.env.NODE_ENV !== "production") {
     global._mssqlPool = pool;
   }
