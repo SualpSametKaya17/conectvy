@@ -60,24 +60,13 @@
   }
 }
 
-/* Thin overlay scrollbar — hides the track, shows thin thumb on hover */
+/* Hide scrollbars globally — content still scrollable via wheel/trackpad */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.25);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  width: 0;
+  height: 0;
 }
 * {
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+  scrollbar-width: none; /* Firefox */
 }
 
 /* Electron: frameless window drag region */
