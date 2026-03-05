@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Monitor, Building2, Map, Wifi, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
+import { Monitor, Building2, Map, Wifi, AlertTriangle, RefreshCw } from "lucide-react";
 import { formatDate, getToolLabel } from "@/lib/utils";
 import Link from "next/link";
 import {
@@ -35,7 +35,6 @@ interface DashboardData {
     company: { name: string } | null;
     region: { name: string } | null;
   }>;
-  toolStats: Array<{ tool: string; count: number }>;
   maintenanceAlerts: MaintenanceAlert[];
 }
 
@@ -124,63 +123,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Bakım Uyarıları */}
-      {(loading || alerts.length > 0) && (
-        <Card className="border-orange-300 dark:border-orange-800">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2 text-orange-600 dark:text-orange-400">
-                <AlertTriangle className="h-4 w-4" />
-                Bakım Sözleşmesi Uyarıları
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchData}
-                disabled={loading}
-                className="h-7 gap-1 text-xs text-muted-foreground"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-                Yenile
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-            ) : (
-              <div className="space-y-2">
-                {alerts.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                  >
-                    <Link href="/companies" className="font-medium hover:underline">
-                      {a.name}
-                    </Link>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">
-                        {/* Yerel tarih gösterimi — UTC kaynaklı kaymayı önler */}
-                        {a.maintenanceEndDate.substring(0, 10).split("-").reverse().join(".")}
-                      </span>
-                      <MaintenanceBadge endDate={a.maintenanceEndDate} settings={settings} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Bakım uyarısı yoksa yeşil onay */}
-      {!loading && alerts.length === 0 && (
-        <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
-          <CheckCircle2 className="h-4 w-4" />
-          <span>Yaklaşan bakım sözleşmesi uyarısı yok.</span>
-        </div>
-      )}
-
       {/* Stat Cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {statCards.map(({ label, value, icon: Icon, href }) => (
@@ -201,7 +143,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Recent Connections */}
+        {/* Son Bağlantılar */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Son Bağlantılar</CardTitle>
@@ -239,22 +181,47 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Tool Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Araç Dağılımı</CardTitle>
+        {/* Bakım Sözleşmesi Uyarıları */}
+        <Card className="border-orange-300 dark:border-orange-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                <AlertTriangle className="h-4 w-4" />
+                Bakım Uyarıları
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchData}
+                disabled={loading}
+                className="h-7 gap-1 text-xs text-muted-foreground"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                Yenile
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
               <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-            ) : !data?.toolStats?.length ? (
-              <p className="text-sm text-muted-foreground">Veri yok.</p>
+            ) : alerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Yaklaşan uyarı yok.</p>
             ) : (
-              <div className="space-y-3">
-                {data.toolStats.map(({ tool, count }) => (
-                  <div key={tool} className="flex items-center justify-between">
-                    <Badge variant={toolVariant[tool] ?? "outline"}>{getToolLabel(tool)}</Badge>
-                    <span className="text-sm font-semibold">{count}</span>
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {alerts.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                  >
+                    <Link href="/companies" className="font-medium hover:underline truncate mr-2">
+                      {a.name}
+                    </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-muted-foreground">
+                        {a.maintenanceEndDate.substring(0, 10).split("-").reverse().join(".")}
+                      </span>
+                      <MaintenanceBadge endDate={a.maintenanceEndDate} settings={settings} />
+                    </div>
                   </div>
                 ))}
               </div>
