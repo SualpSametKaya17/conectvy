@@ -47,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import * as XLSX from "xlsx";
 import { ConnectionForm } from "@/components/connections/ConnectionForm";
 import { formatDate, getToolLabel, CONNECTION_TOOLS } from "@/lib/utils";
 import type { CreateConnectionInput } from "@/lib/validations/connection";
@@ -226,8 +227,8 @@ export default function ConnectionsPage() {
     setExporting(true);
     try {
       const params = new URLSearchParams({
-        ...(search              ? { search }            : {}),
-        ...(toolFilter !== "ALL" ? { tool: toolFilter } : {}),
+        ...(search               ? { search }            : {}),
+        ...(toolFilter !== "ALL" ? { tool: toolFilter }  : {}),
       });
       const res  = await fetch(`/api/connections/export?${params}`);
       const json = await res.json();
@@ -265,34 +266,43 @@ export default function ConnectionsPage() {
       }
 
       // Başlık satırı
-      const header = ["Şirket", "Bölge", "Not"];
+      const header: string[] = ["Şirket", "Bölge", "Not"];
       for (let i = 1; i <= maxAD; i++) header.push(`AnyDesk ${i} No`, `AnyDesk ${i} Şifre`);
       for (let i = 1; i <= maxRD; i++) header.push(`RustDesk ${i} No`, `RustDesk ${i} Şifre`);
 
-      // Veri satırları
-      const lines = [
-        header.join(";"),
-        ...Array.from(map.values()).map((g) => {
-          const cols = [
-            `"${g.company}"`,
-            `"${[...g.regions].join(", ")}"`,
-            `"${g.notes.filter(Boolean).join(" | ")}"`,
-          ];
-          for (let i = 0; i < maxAD; i++)
-            cols.push(`"${g.anydesk[i]?.remoteId  ?? ""}"`, `"${g.anydesk[i]?.password  ?? ""}"`);
-          for (let i = 0; i < maxRD; i++)
-            cols.push(`"${g.rustdesk[i]?.remoteId ?? ""}"`, `"${g.rustdesk[i]?.password ?? ""}"`);
-          return cols.join(";");
-        }),
+      // Veri satırları (her grup bir satır)
+      const dataRows = Array.from(map.values()).map((g) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row: any[] = [
+          g.company,
+          [...g.regions].join(", "),
+          g.notes.filter(Boolean).join(" | "),
+        ];
+        for (let i = 0; i < maxAD; i++) {
+          row.push(g.anydesk[i]?.remoteId ?? "", g.anydesk[i]?.password ?? "");
+        }
+        for (let i = 0; i < maxRD; i++) {
+          row.push(g.rustdesk[i]?.remoteId ?? "", g.rustdesk[i]?.password ?? "");
+        }
+        return row;
+      });
+
+      // XLSX oluştur
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+
+      // Sütun genişlikleri
+      ws["!cols"] = [
+        { wch: 30 }, // Şirket
+        { wch: 20 }, // Bölge
+        { wch: 25 }, // Not
+        ...Array.from({ length: (maxAD + maxRD) * 2 }, (_, i) =>
+          i % 2 === 0 ? { wch: 16 } : { wch: 14 }  // No | Şifre
+        ),
       ];
 
-      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `baglantilar_${new Date().toISOString().split("T")[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      XLSX.utils.book_append_sheet(wb, ws, "Bağlantılar");
+      XLSX.writeFile(wb, `baglantilar_${new Date().toISOString().split("T")[0]}.xlsx`);
       toast.success(`${map.size} firma dışa aktarıldı`);
     } catch {
       toast.error("Dışa aktarma başarısız");
@@ -333,7 +343,7 @@ export default function ConnectionsPage() {
           {exporting
             ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             : <Download className="mr-2 h-4 w-4" />}
-          Dışa Aktar
+          Excel'e Aktar
         </Button>
 
         <Button onClick={openCreate}>
