@@ -226,7 +226,7 @@ export default function ConnectionsPage() {
     setExporting(true);
     try {
       const params = new URLSearchParams({
-        pageSize: "10000",
+        pageSize: "5000",
         ...(search              ? { search }             : {}),
         ...(toolFilter !== "ALL" ? { tool: toolFilter }  : {}),
       });
