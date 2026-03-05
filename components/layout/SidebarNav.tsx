@@ -10,6 +10,7 @@ import {
   Settings,
   Wifi,
   Cpu,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -20,6 +21,7 @@ const navItems = [
     items: [
       { href: "/dashboard",   label: "Dashboard",      icon: LayoutDashboard },
       { href: "/connections", label: "Bağlantılar",    icon: Monitor },
+      { href: "/passwords",   label: "Şifrelerim",     icon: KeyRound },
     ],
   },
   {

@@ -73,6 +73,26 @@ async function getPool(): Promise<sql.ConnectionPool> {
     // Hata olursa sessizce geç
   }
 
+  try {
+    await pool.request().query(`
+      IF OBJECT_ID('passwords','U') IS NULL
+        CREATE TABLE passwords (
+          id         INT IDENTITY(1,1) PRIMARY KEY,
+          title      NVARCHAR(255)  NOT NULL,
+          username   NVARCHAR(255)  NULL,
+          password   NVARCHAR(1000) NULL,
+          url        NVARCHAR(500)  NULL,
+          category   NVARCHAR(50)   NULL DEFAULT 'Genel',
+          notes      NVARCHAR(MAX)  NULL,
+          is_active  BIT            NOT NULL DEFAULT 1,
+          created_at DATETIME2      NOT NULL DEFAULT GETDATE(),
+          updated_at DATETIME2      NOT NULL DEFAULT GETDATE()
+        );
+    `);
+  } catch {
+    // Hata olursa sessizce geç
+  }
+
   // ── Performance indexes (idempotent) ─────────────────────────────────────
   const indexes: [string, string][] = [
     [
