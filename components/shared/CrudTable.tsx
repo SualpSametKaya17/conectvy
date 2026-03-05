@@ -182,9 +182,9 @@ export function CrudTable<T extends { id: number }>({
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>Toplam {total} kayıt</span>
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>Toplam {total} kayıt</span>
+        {totalPages > 1 && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page === 1} onClick={() => onPageChange(page - 1)}>
               Önceki
@@ -194,8 +194,8 @@ export function CrudTable<T extends { id: number }>({
               Sonraki
             </Button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

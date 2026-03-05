@@ -538,7 +538,7 @@ export default function ComputersPage() {
   const [computers, setComputers] = useState<Computer[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 10;
 
   const [search, setSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState<string>("ALL");
@@ -758,9 +758,9 @@ export default function ComputersPage() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>Toplam {total} kayıt</span>
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>Toplam {total} kayıt</span>
+        {totalPages > 1 && (
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -780,8 +780,8 @@ export default function ComputersPage() {
               Sonraki
             </Button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

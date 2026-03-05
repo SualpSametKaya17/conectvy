@@ -310,7 +310,7 @@ export default function CompaniesPage() {
     warnDays: 30,
     urgentDays: 7,
   });
-  const pageSize = 20;
+  const pageSize = 10;
 
   useEffect(() => {
     setSettings(loadMaintenanceSettings());

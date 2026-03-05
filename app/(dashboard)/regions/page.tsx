@@ -150,7 +150,7 @@ export default function RegionsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const pageSize = 20;
+  const pageSize = 10;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
