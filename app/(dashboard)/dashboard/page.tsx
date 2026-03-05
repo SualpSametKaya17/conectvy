@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Monitor, Building2, Map, Wifi, AlertTriangle, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Monitor, Building2, Map, Wifi, AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { formatDate, getToolLabel } from "@/lib/utils";
 import Link from "next/link";
 import {
@@ -80,10 +81,14 @@ const toolVariant: Record<string, "default" | "secondary" | "outline"> = {
   OTHER: "outline",
 };
 
+const ALERT_PAGE_SIZE = 10;
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<MaintenanceSettings>(DEFAULT_MAINTENANCE_SETTINGS);
+  const [alertSearch, setAlertSearch] = useState("");
+  const [alertPage, setAlertPage] = useState(1);
 
   useEffect(() => {
     setSettings(loadMaintenanceSettings());
@@ -92,7 +97,6 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // warnDays'i query param olarak gönder; API bu eşiğe göre filtreleme yapar
       const params = new URLSearchParams({ warnDays: String(settings.warnDays) });
       const res = await fetch(`/api/dashboard?${params}`, { cache: "no-store" });
       if (!res.ok) { setData(null); return; }
@@ -109,10 +113,20 @@ export default function DashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // Bakım alertlerini client tarafında warnDays eşiğine göre filtrele ve daysLeft'e göre sırala
+  // Bakım alertlerini filtrele ve sırala
   const alerts: MaintenanceAlert[] = (data?.maintenanceAlerts ?? [])
     .filter((a) => calcDaysLeft(a.maintenanceEndDate) <= settings.warnDays)
     .sort((a, b) => calcDaysLeft(a.maintenanceEndDate) - calcDaysLeft(b.maintenanceEndDate));
+
+  // Arama + sayfalama
+  const filteredAlerts = alertSearch.trim()
+    ? alerts.filter((a) => a.name.toLowerCase().includes(alertSearch.toLowerCase()))
+    : alerts;
+  const alertTotalPages = Math.max(1, Math.ceil(filteredAlerts.length / ALERT_PAGE_SIZE));
+  const pagedAlerts = filteredAlerts.slice(
+    (alertPage - 1) * ALERT_PAGE_SIZE,
+    alertPage * ALERT_PAGE_SIZE,
+  );
 
   const statCards = [
     { label: "Toplam Bağlantı", value: data?.stats.totalConnections ?? "—", icon: Monitor,   href: "/connections" },
@@ -182,8 +196,8 @@ export default function DashboardPage() {
         </Card>
 
         {/* Bakım Sözleşmesi Uyarıları */}
-        <Card className="border-orange-300 dark:border-orange-800 flex flex-col">
-          <CardHeader className="pb-2 shrink-0">
+        <Card className="border-orange-300 dark:border-orange-800">
+          <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2 text-orange-600 dark:text-orange-400">
                 <AlertTriangle className="h-4 w-4" />
@@ -201,14 +215,28 @@ export default function DashboardPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="flex-1 overflow-hidden min-h-0">
+          <CardContent className="space-y-3">
+            {/* Arama */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Firma ara..."
+                className="pl-8 h-8 text-sm"
+                value={alertSearch}
+                onChange={(e) => { setAlertSearch(e.target.value); setAlertPage(1); }}
+              />
+            </div>
+
+            {/* Liste */}
             {loading ? (
               <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-            ) : alerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Yaklaşan uyarı yok.</p>
+            ) : pagedAlerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {alertSearch ? "Sonuç bulunamadı." : "Yaklaşan uyarı yok."}
+              </p>
             ) : (
-              <div className="space-y-2 h-full overflow-y-auto pr-1">
-                {alerts.map((a) => (
+              <div className="space-y-1.5">
+                {pagedAlerts.map((a) => (
                   <div
                     key={a.id}
                     className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
@@ -224,6 +252,34 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Sayfalama */}
+            {!loading && alertTotalPages > 1 && (
+              <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
+                <span>{filteredAlerts.length} uyarı</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    disabled={alertPage === 1}
+                    onClick={() => setAlertPage((p) => p - 1)}
+                  >
+                    ‹
+                  </Button>
+                  <span className="px-1">{alertPage} / {alertTotalPages}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    disabled={alertPage === alertTotalPages}
+                    onClick={() => setAlertPage((p) => p + 1)}
+                  >
+                    ›
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
