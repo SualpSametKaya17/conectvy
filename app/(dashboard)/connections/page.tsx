@@ -238,19 +238,40 @@ export default function ConnectionsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items: any[] = json.data;
 
-      // Başlık satırı — her bağlantı ayrı satır, bölge bazında sıralı
-      const header = ["Şirket", "Bölge", "Bilgisayar", "Ad", "Araç", "Remote ID", "Şifre", "Not"];
+      // Aynı Şirket+Bölge+Bilgisayar grubundaki bağlantılar yan yana sütunlara eklenir
+      type GroupKey = string;
+      const groupMap = new Map<GroupKey, typeof items>();
+      for (const c of items) {
+        const key = `${c.companyName}|||${c.regionName}|||${c.computerName}`;
+        if (!groupMap.has(key)) groupMap.set(key, []);
+        groupMap.get(key)!.push(c);
+      }
 
-      const dataRows = items.map((c) => [
-        c.companyName  || "",
-        c.regionName   || "",
-        c.computerName || "",
-        c.name         || "",
-        getToolLabel(c.tool),
-        c.remoteId     || "",
-        c.password     || "",
-        c.notes        || "",
-      ]);
+      const maxPerGroup = Math.max(...Array.from(groupMap.values()).map((g) => g.length), 1);
+      const connCols = ["Ad", "Araç", "Remote ID", "Şifre", "Not"];
+      const header = [
+        "Şirket", "Bölge", "Bilgisayar",
+        ...Array.from({ length: maxPerGroup }, (_, i) =>
+          connCols.map((col) => (maxPerGroup > 1 ? `${col} ${i + 1}` : col))
+        ).flat(),
+      ];
+
+      const dataRows = Array.from(groupMap.values()).map((group) => {
+        const first = group[0];
+        const base = [first.companyName || "", first.regionName || "", first.computerName || ""];
+        const cells: string[] = [];
+        for (let i = 0; i < maxPerGroup; i++) {
+          const c = group[i];
+          cells.push(
+            c?.name     || "",
+            c ? getToolLabel(c.tool) : "",
+            c?.remoteId  || "",
+            c?.password  || "",
+            c?.notes     || "",
+          );
+        }
+        return [...base, ...cells];
+      });
 
       // CSV oluştur
       const csvRows = [header, ...dataRows].map((row) =>
