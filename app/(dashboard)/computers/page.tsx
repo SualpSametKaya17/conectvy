@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/form";
 import { CreateComputerSchema, type CreateComputerInput } from "@/lib/validations/computer";
 import { formatDate, DEVICE_TYPES, CONNECTION_TOOLS, getToolLabel } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -549,6 +550,7 @@ export default function ComputersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingComputer, setEditingComputer] = useState<Computer | null>(null);
   const [editingConnections, setEditingConnections] = useState<ConnRow[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const fetchComputers = useCallback(async () => {
     setLoading(true);
@@ -612,7 +614,6 @@ export default function ComputersPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm("Bu cihazı silmek istediğinize emin misiniz?")) return;
     const res  = await fetch(`/api/computers/${id}`, { method: "DELETE" });
     const json = await res.json();
     if (json.success) {
@@ -742,7 +743,7 @@ export default function ComputersPage() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => handleDelete(computer.id)}
+                          onClick={() => setConfirmDeleteId(computer.id)}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Sil
@@ -782,6 +783,16 @@ export default function ComputersPage() {
           </div>
         )}
       </div>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        title="Cihazı sil"
+        description="Bu cihazı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmLabel="Sil"
+        onConfirm={() => { if (confirmDeleteId !== null) handleDelete(confirmDeleteId); }}
+      />
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

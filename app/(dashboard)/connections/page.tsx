@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConnectionForm } from "@/components/connections/ConnectionForm";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { formatDate, getToolLabel, CONNECTION_TOOLS } from "@/lib/utils";
 import type { CreateConnectionInput } from "@/lib/validations/connection";
 
@@ -97,6 +98,8 @@ export default function ConnectionsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
   const [editDefaults, setEditDefaults] = useState<Partial<CreateConnectionInput> | undefined>();
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // Visible password cell
   const [visiblePassId, setVisiblePassId] = useState<number | null>(null);
@@ -169,7 +172,6 @@ export default function ConnectionsPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm("Bu bağlantıyı silmek istediğinize emin misiniz?")) return;
     const res = await fetch(`/api/connections/${id}`, { method: "DELETE" });
     const json = await res.json();
     if (json.success) {
@@ -537,7 +539,7 @@ export default function ConnectionsPage() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => handleDelete(conn.id)}
+                          onClick={() => setConfirmDeleteId(conn.id)}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Sil
@@ -579,6 +581,16 @@ export default function ConnectionsPage() {
           </div>
         )}
       </div>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        title="Bağlantıyı sil"
+        description="Bu bağlantıyı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmLabel="Sil"
+        onConfirm={() => { if (confirmDeleteId !== null) handleDelete(confirmDeleteId); }}
+      />
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

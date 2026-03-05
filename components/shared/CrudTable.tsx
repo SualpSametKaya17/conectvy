@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, Search, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -74,6 +75,7 @@ export function CrudTable<T extends { id: number }>({
 }: Props<T>) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<T | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
   const totalPages = Math.ceil(total / pageSize);
 
   async function openEdit(item: T) {
@@ -88,7 +90,6 @@ export function CrudTable<T extends { id: number }>({
   }
 
   async function handleDelete(id: number) {
-    if (!confirm("Bu kaydı silmek istediğinize emin misiniz?")) return;
     await onDelete(id);
   }
 
@@ -166,7 +167,7 @@ export function CrudTable<T extends { id: number }>({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
-                          onClick={() => handleDelete(row.id)}
+                          onClick={() => setConfirmId(row.id)}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Sil
@@ -196,6 +197,16 @@ export function CrudTable<T extends { id: number }>({
           </div>
         )}
       </div>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={confirmId !== null}
+        onOpenChange={(open) => { if (!open) setConfirmId(null); }}
+        title="Kaydı sil"
+        description="Bu kaydı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmLabel="Sil"
+        onConfirm={() => { if (confirmId !== null) handleDelete(confirmId); }}
+      />
 
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
