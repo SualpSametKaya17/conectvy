@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud, X, Copy, ChevronDown } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud, X, Copy, ChevronDown, KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -84,6 +84,46 @@ function DeviceTypeBadge({ type }: { type: string }) {
   return <Badge variant={variant as "default" | "secondary" | "outline"}>{label}</Badge>;
 }
 
+// ─── Şifre kopyalama butonu ───────────────────────────────────────────────────
+
+function CopyPasswordButton({ connId }: { connId: number }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    setLoading(true);
+    try {
+      const res  = await fetch(`/api/connections/${connId}`);
+      const json = await res.json();
+      const pwd  = json.data?.password;
+      if (pwd) {
+        await navigator.clipboard.writeText(pwd);
+        toast.success("Şifre kopyalandı");
+      } else {
+        toast.info("Bu bağlantıda şifre yok");
+      }
+    } catch {
+      toast.error("Şifre alınamadı");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+      title="Şifreyi kopyala"
+    >
+      {loading
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        : <KeyRound className="h-3.5 w-3.5" />
+      }
+    </button>
+  );
+}
+
 // ─── ConnectionsBadges: tıkla → Remote ID listesi + kopyala ──────────────────
 
 interface ConnSummary { id: number; tool: string; remoteId: string; name: string }
@@ -156,13 +196,16 @@ function ConnectionsBadges({
                 </Badge>
                 <span className="font-mono text-xs truncate">{conn.remoteId}</span>
               </div>
-              <button
-                onClick={() => copy(conn.remoteId, conn.remoteId)}
-                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                title="Kopyala"
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => copy(conn.remoteId, conn.remoteId)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  title="ID kopyala"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <CopyPasswordButton connId={conn.id} />
+              </div>
             </div>
           ))
         )}
@@ -198,9 +241,11 @@ function ComputerForm({
   const [connRows, setConnRows] = useState<ConnRow[]>(initConnections);
 
   // Yeni bağlantı giriş alanları
-  const [newTool, setNewTool]     = useState("RUSTDESK");
+  const [newTool, setNewTool]         = useState("RUSTDESK");
   const [newRemoteId, setNewRemoteId] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const remoteIdRef  = useRef<HTMLInputElement>(null);
+  const passwordRef  = useRef<HTMLInputElement>(null);
 
   function addConnRow() {
     if (!newRemoteId.trim()) return;
@@ -210,6 +255,7 @@ function ComputerForm({
     ]);
     setNewRemoteId("");
     setNewPassword("");
+    setTimeout(() => remoteIdRef.current?.focus(), 0);
   }
 
   function removeConnRow(idx: number) {
@@ -397,7 +443,10 @@ function ComputerForm({
                         {row.remoteId}
                       </span>
                       {row.id && (
-                        <span className="text-[10px] text-muted-foreground shrink-0">mevcut</span>
+                        <>
+                          <span className="text-[10px] text-muted-foreground shrink-0">mevcut</span>
+                          <CopyPasswordButton connId={row.id} />
+                        </>
                       )}
                       <button
                         type="button"
@@ -428,16 +477,21 @@ function ComputerForm({
               </Select>
 
               <Input
+                ref={remoteIdRef}
                 className="h-8 text-xs flex-1 min-w-0"
                 placeholder="Bağlantı No / ID"
                 value={newRemoteId}
                 onChange={(e) => setNewRemoteId(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); addConnRow(); }
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (newRemoteId.trim()) passwordRef.current?.focus();
+                  }
                 }}
               />
 
               <Input
+                ref={passwordRef}
                 className="h-8 text-xs w-24"
                 placeholder="Şifre"
                 type="password"
