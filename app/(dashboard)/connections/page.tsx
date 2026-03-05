@@ -226,31 +226,66 @@ export default function ConnectionsPage() {
     setExporting(true);
     try {
       const params = new URLSearchParams({
-        pageSize: "5000",
-        ...(search              ? { search }             : {}),
-        ...(toolFilter !== "ALL" ? { tool: toolFilter }  : {}),
+        ...(search              ? { search }            : {}),
+        ...(toolFilter !== "ALL" ? { tool: toolFilter } : {}),
       });
-      const res  = await fetch(`/api/connections?${params}`);
+      const res  = await fetch(`/api/connections/export?${params}`);
       const json = await res.json();
-      if (!json.success) return;
+      if (!json.success) { toast.error("Dışa aktarma başarısız"); return; }
 
-      const rows = json.data.items;
-      const header = ["Ad", "Araç", "Remote ID", "Bilgisayar", "Firma", "Bölge", "Güncelleme"];
-      const lines  = [
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items: any[] = json.data;
+
+      // Şirket bazında grupla
+      const map = new Map<string, {
+        company: string;
+        regions: Set<string>;
+        notes: string[];
+        anydesk:  Array<{ remoteId: string; password: string }>;
+        rustdesk: Array<{ remoteId: string; password: string }>;
+      }>();
+
+      for (const c of items) {
+        const key = c.companyName || "—";
+        if (!map.has(key)) {
+          map.set(key, { company: key, regions: new Set(), notes: [], anydesk: [], rustdesk: [] });
+        }
+        const g = map.get(key)!;
+        if (c.regionName) g.regions.add(c.regionName);
+        if (c.notes)      g.notes.push(c.notes);
+        if (c.tool === "ANYDESK")  g.anydesk.push({ remoteId: c.remoteId, password: c.password });
+        if (c.tool === "RUSTDESK") g.rustdesk.push({ remoteId: c.remoteId, password: c.password });
+      }
+
+      // Maksimum bağlantı sayısını bul
+      let maxAD = 0, maxRD = 0;
+      for (const g of map.values()) {
+        if (g.anydesk.length  > maxAD) maxAD = g.anydesk.length;
+        if (g.rustdesk.length > maxRD) maxRD = g.rustdesk.length;
+      }
+
+      // Başlık satırı
+      const header = ["Şirket", "Bölge", "Not"];
+      for (let i = 1; i <= maxAD; i++) header.push(`AnyDesk ${i} No`, `AnyDesk ${i} Şifre`);
+      for (let i = 1; i <= maxRD; i++) header.push(`RustDesk ${i} No`, `RustDesk ${i} Şifre`);
+
+      // Veri satırları
+      const lines = [
         header.join(";"),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ...rows.map((r: any) =>
-          [
-            `"${r.name}"`,
-            r.tool,
-            r.remoteId,
-            `"${r.computer?.name ?? ""}"`,
-            `"${r.company?.name  ?? ""}"`,
-            `"${r.region?.name   ?? ""}"`,
-            formatDate(r.updatedAt),
-          ].join(";")
-        ),
+        ...Array.from(map.values()).map((g) => {
+          const cols = [
+            `"${g.company}"`,
+            `"${[...g.regions].join(", ")}"`,
+            `"${g.notes.filter(Boolean).join(" | ")}"`,
+          ];
+          for (let i = 0; i < maxAD; i++)
+            cols.push(`"${g.anydesk[i]?.remoteId  ?? ""}"`, `"${g.anydesk[i]?.password  ?? ""}"`);
+          for (let i = 0; i < maxRD; i++)
+            cols.push(`"${g.rustdesk[i]?.remoteId ?? ""}"`, `"${g.rustdesk[i]?.password ?? ""}"`);
+          return cols.join(";");
+        }),
       ];
+
       const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -258,7 +293,7 @@ export default function ConnectionsPage() {
       a.download = `baglantilar_${new Date().toISOString().split("T")[0]}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`${rows.length} kayıt dışa aktarıldı`);
+      toast.success(`${map.size} firma dışa aktarıldı`);
     } catch {
       toast.error("Dışa aktarma başarısız");
     } finally {
