@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { AlertTriangle, Clock, CalendarPlus } from "lucide-react";
 import { CrudTable } from "@/components/shared/CrudTable";
 import {
   Form,
@@ -18,6 +19,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreateCompanySchema, type CreateCompanyInput } from "@/lib/validations/company";
+import {
+  loadMaintenanceSettings,
+  type MaintenanceSettings,
+} from "@/lib/maintenance-settings";
 
 interface Company {
   id: number;
@@ -28,32 +33,110 @@ interface Company {
   _count: { connections: number; regions: number; computers: number };
 }
 
-function getMaintenanceStatus(endDate: string | null): "active" | "expiring" | "expired" | "none" {
+type MaintenanceStatus = "active" | "expiring" | "urgent" | "expired" | "none";
+
+function getMaintenanceStatus(
+  endDate: string | null,
+  settings: MaintenanceSettings
+): MaintenanceStatus {
   if (!endDate) return "none";
-  // Her iki tarihi de yerel gece yarısına normalize et; UTC/yerel saat farkından kaynaklanan
-  // yuvarlama hatalarını önler (ör. UTC+3'te 30 günlük tarih yanlış "Aktif" gösteriyordu).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const end = new Date(endDate.substring(0, 10) + "T00:00:00"); // yerel gece yarısı
+  const end = new Date(endDate.substring(0, 10) + "T00:00:00");
   if (end < today) return "expired";
   const daysLeft = Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  return daysLeft <= 30 ? "expiring" : "active";
+  if (daysLeft <= settings.urgentDays) return "urgent";
+  if (daysLeft <= settings.warnDays) return "expiring";
+  return "active";
 }
 
-function MaintenanceBadge({ endDate }: { endDate: string | null }) {
-  const status = getMaintenanceStatus(endDate);
-  if (status === "none") return <Badge variant="outline" className="text-muted-foreground">Yok</Badge>;
-  if (status === "expired") return <Badge variant="destructive">Süresi Doldu</Badge>;
-  if (status === "expiring") return <Badge className="bg-orange-500 hover:bg-orange-600">Yakında Bitiyor</Badge>;
+function getDaysLeft(endDate: string | null): number | null {
+  if (!endDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(endDate.substring(0, 10) + "T00:00:00");
+  return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function MaintenanceBadge({
+  endDate,
+  settings,
+}: {
+  endDate: string | null;
+  settings: MaintenanceSettings;
+}) {
+  const status = getMaintenanceStatus(endDate, settings);
+  if (status === "none")
+    return <Badge variant="outline" className="text-muted-foreground">Yok</Badge>;
+  if (status === "expired")
+    return <Badge variant="destructive">Süresi Doldu</Badge>;
+  if (status === "urgent")
+    return <Badge className="bg-red-600 hover:bg-red-700">Kritik</Badge>;
+  if (status === "expiring")
+    return <Badge className="bg-orange-500 hover:bg-orange-600">Yakında Bitiyor</Badge>;
   return <Badge className="bg-green-600 hover:bg-green-700">Aktif</Badge>;
+}
+
+function MaintenanceWarningBanner({
+  endDate,
+  settings,
+}: {
+  endDate: string | null;
+  settings: MaintenanceSettings;
+}) {
+  const status = getMaintenanceStatus(endDate, settings);
+  const daysLeft = getDaysLeft(endDate);
+
+  if (status === "none" || status === "active") return null;
+
+  if (status === "expired") {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>Bakım desteği süresi dolmuş. Lütfen yenileyin.</span>
+      </div>
+    );
+  }
+
+  if (status === "urgent") {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-red-400/40 bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          Bakım desteği <strong>{daysLeft} gün</strong> içinde bitiyor. Acilen yenileyin!
+        </span>
+      </div>
+    );
+  }
+
+  // expiring
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-orange-400/40 bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:bg-orange-950/30 dark:text-orange-400">
+      <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>
+        Bakım desteği <strong>{daysLeft} gün</strong> içinde bitiyor.
+      </span>
+    </div>
+  );
+}
+
+function addOneYear(dateStr: string | null): string {
+  const base = dateStr && dateStr > new Date().toISOString().substring(0, 10)
+    ? dateStr.substring(0, 10)
+    : new Date().toISOString().substring(0, 10);
+  const d = new Date(base + "T00:00:00");
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().substring(0, 10);
 }
 
 function CompanyForm({
   item,
   onSuccess,
+  settings,
 }: {
   item: Company | null;
   onSuccess: () => void;
+  settings: MaintenanceSettings;
 }) {
   const itemRef = useRef(item);
   const form = useForm<CreateCompanyInput>({
@@ -70,7 +153,7 @@ function CompanyForm({
     },
   });
 
-  // item prop değiştiğinde (farklı firma açılınca) formu sıfırla
+  // item prop değiştiğinde formu sıfırla
   useEffect(() => {
     if (itemRef.current?.id !== item?.id) {
       itemRef.current = item;
@@ -110,9 +193,33 @@ function CompanyForm({
     }
   }
 
+  function handleQuickExtend() {
+    const currentEnd = form.getValues("maintenanceEndDate");
+    const newEnd = addOneYear(currentEnd || null);
+    form.setValue("maintenanceEndDate", newEnd, { shouldValidate: true });
+
+    // Başlangıç tarihi yoksa bugünü ata
+    const currentStart = form.getValues("maintenanceStartDate");
+    if (!currentStart) {
+      form.setValue(
+        "maintenanceStartDate",
+        new Date().toISOString().substring(0, 10),
+        { shouldValidate: true }
+      );
+    }
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* Mevcut bakım durumu uyarısı */}
+        {item && (
+          <MaintenanceWarningBanner
+            endDate={item.maintenanceEndDate}
+            settings={settings}
+          />
+        )}
+
         <FormField
           control={form.control}
           name="name"
@@ -140,7 +247,19 @@ function CompanyForm({
 
         {/* Bakım Destek Tarihleri */}
         <div className="rounded-md border p-3 space-y-3">
-          <p className="text-sm font-medium text-muted-foreground">Yıllık Bakım Desteği</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-muted-foreground">Yıllık Bakım Desteği</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleQuickExtend}
+              className="h-7 gap-1 text-xs"
+            >
+              <CalendarPlus className="h-3.5 w-3.5" />
+              1 Yıl Uzat
+            </Button>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <FormField
               control={form.control}
@@ -187,7 +306,15 @@ export default function CompaniesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<MaintenanceSettings>({
+    warnDays: 30,
+    urgentDays: 7,
+  });
   const pageSize = 20;
+
+  useEffect(() => {
+    setSettings(loadMaintenanceSettings());
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -232,7 +359,7 @@ export default function CompaniesPage() {
           key: "maintenance",
           header: "Bakım Desteği",
           className: "hidden sm:table-cell",
-          render: (r) => <MaintenanceBadge endDate={r.maintenanceEndDate} />,
+          render: (r) => <MaintenanceBadge endDate={r.maintenanceEndDate} settings={settings} />,
         },
         {
           key: "computers",
@@ -265,6 +392,7 @@ export default function CompaniesPage() {
       renderForm={({ item, onSuccess }) => (
         <CompanyForm
           item={item}
+          settings={settings}
           onSuccess={() => { onSuccess(); fetchData(); }}
         />
       )}

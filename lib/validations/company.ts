@@ -1,6 +1,16 @@
 import { z } from "zod";
 
-export const CreateCompanySchema = z.object({
+const dateFieldSchema = z.string().optional().nullable().or(z.literal(""));
+
+const dateOrderRefinement = (start: string | null | undefined, end: string | null | undefined) =>
+  !start || !end || start <= end;
+
+const DATE_ORDER_ERROR = {
+  message: "Başlangıç tarihi bitiş tarihinden sonra olamaz",
+  path: ["maintenanceStartDate"] as const,
+};
+
+const BaseCompanySchema = z.object({
   name: z
     .string()
     .min(1, "Firma adı zorunludur")
@@ -10,11 +20,19 @@ export const CreateCompanySchema = z.object({
     .max(1000, "Açıklama en fazla 1000 karakter olabilir")
     .optional()
     .or(z.literal("")),
-  maintenanceStartDate: z.string().optional().nullable(),
-  maintenanceEndDate: z.string().optional().nullable(),
+  maintenanceStartDate: dateFieldSchema,
+  maintenanceEndDate: dateFieldSchema,
 });
 
-export const UpdateCompanySchema = CreateCompanySchema.partial();
+export const CreateCompanySchema = BaseCompanySchema.refine(
+  (d) => dateOrderRefinement(d.maintenanceStartDate, d.maintenanceEndDate),
+  DATE_ORDER_ERROR
+);
+
+export const UpdateCompanySchema = BaseCompanySchema.partial().refine(
+  (d) => dateOrderRefinement(d.maintenanceStartDate, d.maintenanceEndDate),
+  DATE_ORDER_ERROR
+);
 
 export const CompanyIdSchema = z.object({
   id: z.coerce.number().int().positive("Geçerli bir ID giriniz"),

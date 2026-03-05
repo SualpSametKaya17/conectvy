@@ -3,19 +3,27 @@
 /**
  * Settings Sayfası
  *
- * Acceptance Criteria:
- * - DB bağlantı durumu (health check) gösterilir; "Yenile" butonu ile tekrar kontrol edilir.
- * - Uygulama adı, sürüm ve DB URL (maskelenmiş) bilgileri gösterilir.
- * - Durum: yeşil (ok) / kırmızı (error) badge ile gösterilir.
+ * - DB bağlantı durumu (health check) gösterilir.
+ * - Bakım desteği uyarı eşikleri ayarlanır (localStorage'da saklanır).
+ * - Uygulama bilgileri gösterilir.
  */
 
 import { useState, useEffect } from "react";
-import { RefreshCw, CheckCircle2, XCircle, Database, Info } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Database, Info, Bell } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import {
+  loadMaintenanceSettings,
+  saveMaintenanceSettings,
+  DEFAULT_MAINTENANCE_SETTINGS,
+  type MaintenanceSettings,
+} from "@/lib/maintenance-settings";
 
 interface HealthData {
   status: "ok" | "error";
@@ -28,7 +36,6 @@ interface HealthData {
 function maskDbUrl(url: string | undefined): string {
   if (!url) return "—";
   try {
-    // Hide password: replace password=xxx with password=****
     return url.replace(/(password=)[^;]+/i, "$1****");
   } catch {
     return "—";
@@ -38,6 +45,22 @@ function maskDbUrl(url: string | undefined): string {
 export default function SettingsPage() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [checking, setChecking] = useState(false);
+
+  // Bakım uyarı eşiği ayarları
+  const [maintenanceSettings, setMaintenanceSettings] = useState<MaintenanceSettings>(
+    DEFAULT_MAINTENANCE_SETTINGS
+  );
+  const [warnDaysInput, setWarnDaysInput] = useState(String(DEFAULT_MAINTENANCE_SETTINGS.warnDays));
+  const [urgentDaysInput, setUrgentDaysInput] = useState(
+    String(DEFAULT_MAINTENANCE_SETTINGS.urgentDays)
+  );
+
+  useEffect(() => {
+    const saved = loadMaintenanceSettings();
+    setMaintenanceSettings(saved);
+    setWarnDaysInput(String(saved.warnDays));
+    setUrgentDaysInput(String(saved.urgentDays));
+  }, []);
 
   async function checkHealth() {
     setChecking(true);
@@ -59,6 +82,37 @@ export default function SettingsPage() {
   }
 
   useEffect(() => { checkHealth(); }, []);
+
+  function handleSaveMaintenanceSettings() {
+    const warn = parseInt(warnDaysInput, 10);
+    const urgent = parseInt(urgentDaysInput, 10);
+
+    if (!warn || warn < 1) {
+      toast.error("'Yakında Bitiyor' eşiği en az 1 gün olmalıdır");
+      return;
+    }
+    if (!urgent || urgent < 1) {
+      toast.error("'Kritik' eşiği en az 1 gün olmalıdır");
+      return;
+    }
+    if (urgent >= warn) {
+      toast.error("'Kritik' eşiği, 'Yakında Bitiyor' eşiğinden küçük olmalıdır");
+      return;
+    }
+
+    const newSettings: MaintenanceSettings = { warnDays: warn, urgentDays: urgent };
+    saveMaintenanceSettings(newSettings);
+    setMaintenanceSettings(newSettings);
+    toast.success("Uyarı eşikleri kaydedildi");
+  }
+
+  function handleResetMaintenanceSettings() {
+    saveMaintenanceSettings(DEFAULT_MAINTENANCE_SETTINGS);
+    setMaintenanceSettings(DEFAULT_MAINTENANCE_SETTINGS);
+    setWarnDaysInput(String(DEFAULT_MAINTENANCE_SETTINGS.warnDays));
+    setUrgentDaysInput(String(DEFAULT_MAINTENANCE_SETTINGS.urgentDays));
+    toast.success("Varsayılan değerlere sıfırlandı");
+  }
 
   const isOk = health?.status === "ok";
 
@@ -120,6 +174,99 @@ export default function SettingsPage() {
                 {maskDbUrl(process.env.NEXT_PUBLIC_DB_URL_HINT)}
               </span>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bakım Uyarı Eşikleri */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-base">Bakım Desteği Uyarı Eşikleri</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Bakım bitiş tarihine kaç gün kaldığında hangi uyarı gösterileceğini belirleyin.
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="warnDays" className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-orange-500" />
+                Yakında Bitiyor (gün)
+              </Label>
+              <Input
+                id="warnDays"
+                type="number"
+                min={2}
+                value={warnDaysInput}
+                onChange={(e) => setWarnDaysInput(e.target.value)}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">
+                Şu an: <strong>{maintenanceSettings.warnDays} gün</strong>
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="urgentDays" className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-600" />
+                Kritik (gün)
+              </Label>
+              <Input
+                id="urgentDays"
+                type="number"
+                min={1}
+                value={urgentDaysInput}
+                onChange={(e) => setUrgentDaysInput(e.target.value)}
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">
+                Şu an: <strong>{maintenanceSettings.urgentDays} gün</strong>
+              </p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Örnek gösterim */}
+          <div className="space-y-1 text-sm">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Badge Önizleme
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="bg-green-600 hover:bg-green-700">Aktif</Badge>
+              <span className="text-xs text-muted-foreground self-center">
+                → {maintenanceSettings.warnDays}+ gün kala
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="bg-orange-500 hover:bg-orange-600">Yakında Bitiyor</Badge>
+              <span className="text-xs text-muted-foreground self-center">
+                → {maintenanceSettings.urgentDays + 1}–{maintenanceSettings.warnDays} gün kala
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="bg-red-600 hover:bg-red-700">Kritik</Badge>
+              <span className="text-xs text-muted-foreground self-center">
+                → 1–{maintenanceSettings.urgentDays} gün kala
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="destructive">Süresi Doldu</Badge>
+              <span className="text-xs text-muted-foreground self-center">
+                → Bitiş tarihi geçmiş
+              </span>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button onClick={handleSaveMaintenanceSettings}>Kaydet</Button>
+            <Button variant="outline" onClick={handleResetMaintenanceSettings}>
+              Varsayılana Sıfırla
+            </Button>
           </div>
         </CardContent>
       </Card>
