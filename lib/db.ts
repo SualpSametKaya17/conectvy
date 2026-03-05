@@ -51,6 +51,18 @@ async function getPool(): Promise<sql.ConnectionPool> {
     // Hata olursa sessizce geç
   }
 
+  try {
+    await pool.request().query(`
+      IF OBJECT_ID('companies','U') IS NOT NULL AND
+         NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('companies') AND name = 'maintenance_start_date')
+        ALTER TABLE companies
+          ADD maintenance_start_date DATE NULL,
+              maintenance_end_date   DATE NULL;
+    `);
+  } catch {
+    // Hata olursa sessizce geç — kolonlar zaten mevcut olabilir
+  }
+
   if (process.env.NODE_ENV !== "production") {
     global._mssqlPool = pool;
   }

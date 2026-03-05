@@ -1,4 +1,4 @@
-import { getPool } from "@/lib/db";
+import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/utils";
 
 /**
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       // Üst sınır: warnDays + 30 gün ek buffer (client tarafında zaten filtreleniyor)
       // Alt sınır: 30 gün önce dolmuş (hâlâ uyarıda görünsün)
       pool.request()
-        .input("warnDays", warnDays + 30)
+        .input("warnDays", sql.Int, warnDays + 30)
         .query(`
           SELECT TOP 50
             id, name,
