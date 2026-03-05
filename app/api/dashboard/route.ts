@@ -3,9 +3,20 @@ import { apiSuccess, apiError } from "@/lib/utils";
 
 /**
  * GET /api/dashboard
+ *
+ * Query params:
+ *   warnDays  – kaç güne kadar kalan sözleşmeleri getir (varsayılan 90)
+ *               client'tan bakım ayarlarına göre gönderilir.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const warnDaysParam = parseInt(searchParams.get("warnDays") ?? "90", 10);
+    // Makul bir aralık: en az 30, en fazla 730 gün
+    const warnDays = isNaN(warnDaysParam) || warnDaysParam < 30
+      ? 90
+      : Math.min(warnDaysParam, 730);
+
     const pool = await getPool();
 
     const [stats, recent, tools, maintenance] = await Promise.all([
@@ -46,18 +57,22 @@ export async function GET() {
         GROUP BY tool
       `),
 
-      // Bakım süresi dolan / yaklaşan firmalar (son 30 gün + önümüzdeki 60 gün)
-      pool.request().query(`
-        SELECT TOP 10
-          id, name,
-          maintenance_end_date AS maintenanceEndDate,
-          DATEDIFF(day, GETDATE(), maintenance_end_date) AS daysLeft
-        FROM companies
-        WHERE is_active = 1
-          AND maintenance_end_date IS NOT NULL
-          AND maintenance_end_date BETWEEN DATEADD(day, -30, GETDATE()) AND DATEADD(day, 60, GETDATE())
-        ORDER BY maintenance_end_date ASC
-      `),
+      // Bakım süresi dolan veya yaklaşan firmalar
+      // Üst sınır: warnDays + 30 gün ek buffer (client tarafında zaten filtreleniyor)
+      // Alt sınır: 30 gün önce dolmuş (hâlâ uyarıda görünsün)
+      pool.request()
+        .input("warnDays", warnDays + 30)
+        .query(`
+          SELECT TOP 50
+            id, name,
+            maintenance_end_date AS maintenanceEndDate
+          FROM companies
+          WHERE is_active = 1
+            AND maintenance_end_date IS NOT NULL
+            AND maintenance_end_date >= DATEADD(day, -30, CAST(GETDATE() AS date))
+            AND maintenance_end_date <= DATEADD(day, @warnDays, CAST(GETDATE() AS date))
+          ORDER BY maintenance_end_date ASC
+        `),
     ]);
 
     const s = stats.recordset[0];
@@ -77,11 +92,11 @@ export async function GET() {
       count: row.cnt,
     }));
 
+    // daysLeft artık client tarafında hesaplanıyor (UTC/yerel saat tutarlılığı için)
     const maintenanceAlerts = maintenance.recordset.map((row) => ({
       id:                 row.id,
       name:               row.name,
       maintenanceEndDate: row.maintenanceEndDate,
-      daysLeft:           row.daysLeft as number,
     }));
 
     return apiSuccess({
