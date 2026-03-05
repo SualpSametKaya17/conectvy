@@ -18,11 +18,13 @@ export async function GET(request: Request) {
           c.remote_id AS remoteId,
           c.password,
           c.notes,
-          co.name AS companyName,
-          r.name  AS regionName
+          co.name   AS companyName,
+          r.name    AS regionName,
+          comp.name AS computerName
         FROM connections c
-        LEFT JOIN companies co  ON co.id = c.company_id
-        LEFT JOIN regions   r   ON r.id  = c.region_id
+        LEFT JOIN companies co   ON co.id   = c.company_id
+        LEFT JOIN regions   r    ON r.id    = c.region_id
+        LEFT JOIN computers comp ON comp.id = c.computer_id
         WHERE c.is_active = 1
           AND (@tool   IS NULL OR c.tool  = @tool)
           AND (
@@ -35,14 +37,15 @@ export async function GET(request: Request) {
 
     return apiSuccess(
       result.recordset.map((row) => ({
-        id:          row.id,
-        name:        row.name,
-        tool:        row.tool,
-        remoteId:    row.remoteId,
-        password:    row.password ?? "",
-        notes:       row.notes   ?? "",
-        companyName: row.companyName ?? "",
-        regionName:  row.regionName  ?? "",
+        id:           row.id,
+        name:         row.name,
+        tool:         row.tool,
+        remoteId:     row.remoteId,
+        password:     row.password     ?? "",
+        notes:        row.notes        ?? "",
+        companyName:  row.companyName  ?? "",
+        regionName:   row.regionName   ?? "",
+        computerName: row.computerName ?? "",
       }))
     );
   } catch (error) {

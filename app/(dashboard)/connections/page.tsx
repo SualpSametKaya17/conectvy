@@ -13,9 +13,9 @@
  * - Şifre listede gösterilmez; düzenleme modalında maskelenmiş gelir.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Copy, Eye, EyeOff, MonitorPlay, Download, Loader2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Copy, Eye, EyeOff, MonitorPlay, Download, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +103,8 @@ export default function ConnectionsPage() {
   const [passwords, setPasswords]         = useState<Record<number, string>>({});
   const [connectingId, setConnectingId]   = useState<number | null>(null);
   const [exporting, setExporting]         = useState(false);
+  const [importing, setImporting]         = useState(false);
+  const importInputRef                    = useRef<HTMLInputElement>(null);
 
   const fetchConnections = useCallback(async () => {
     setLoading(true);
@@ -236,55 +238,19 @@ export default function ConnectionsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const items: any[] = json.data;
 
-      // Şirket bazında grupla
-      const map = new Map<string, {
-        company: string;
-        regions: Set<string>;
-        notes: string[];
-        anydesk:  Array<{ remoteId: string; password: string }>;
-        rustdesk: Array<{ remoteId: string; password: string }>;
-      }>();
+      // Başlık satırı — her bağlantı ayrı satır, bölge bazında sıralı
+      const header = ["Şirket", "Bölge", "Bilgisayar", "Ad", "Araç", "Remote ID", "Şifre", "Not"];
 
-      for (const c of items) {
-        const key = c.companyName || "—";
-        if (!map.has(key)) {
-          map.set(key, { company: key, regions: new Set(), notes: [], anydesk: [], rustdesk: [] });
-        }
-        const g = map.get(key)!;
-        if (c.regionName) g.regions.add(c.regionName);
-        if (c.notes)      g.notes.push(c.notes);
-        if (c.tool === "ANYDESK")  g.anydesk.push({ remoteId: c.remoteId, password: c.password });
-        if (c.tool === "RUSTDESK") g.rustdesk.push({ remoteId: c.remoteId, password: c.password });
-      }
-
-      // Maksimum bağlantı sayısını bul
-      let maxAD = 0, maxRD = 0;
-      for (const g of map.values()) {
-        if (g.anydesk.length  > maxAD) maxAD = g.anydesk.length;
-        if (g.rustdesk.length > maxRD) maxRD = g.rustdesk.length;
-      }
-
-      // Başlık satırı
-      const header: string[] = ["Şirket", "Bölge", "Not"];
-      for (let i = 1; i <= maxAD; i++) header.push(`AnyDesk ${i} No`, `AnyDesk ${i} Şifre`);
-      for (let i = 1; i <= maxRD; i++) header.push(`RustDesk ${i} No`, `RustDesk ${i} Şifre`);
-
-      // Veri satırları (her grup bir satır)
-      const dataRows = Array.from(map.values()).map((g) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const row: any[] = [
-          g.company,
-          [...g.regions].join(", "),
-          g.notes.filter(Boolean).join(" | "),
-        ];
-        for (let i = 0; i < maxAD; i++) {
-          row.push(g.anydesk[i]?.remoteId ?? "", g.anydesk[i]?.password ?? "");
-        }
-        for (let i = 0; i < maxRD; i++) {
-          row.push(g.rustdesk[i]?.remoteId ?? "", g.rustdesk[i]?.password ?? "");
-        }
-        return row;
-      });
+      const dataRows = items.map((c) => [
+        c.companyName  || "",
+        c.regionName   || "",
+        c.computerName || "",
+        c.name         || "",
+        getToolLabel(c.tool),
+        c.remoteId     || "",
+        c.password     || "",
+        c.notes        || "",
+      ]);
 
       // CSV oluştur
       const csvRows = [header, ...dataRows].map((row) =>
@@ -298,11 +264,100 @@ export default function ConnectionsPage() {
       a.download = `baglantilar_${new Date().toISOString().split("T")[0]}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`${map.size} firma dışa aktarıldı`);
+      toast.success(`${items.length} bağlantı dışa aktarıldı`);
     } catch {
       toast.error("Dışa aktarma başarısız");
     } finally {
       setExporting(false);
+    }
+  }
+
+  function parseCSV(text: string): string[][] {
+    const rows: string[][] = [];
+    const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const cells: string[] = [];
+      let cur = "", inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuote) {
+          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+          else if (ch === '"') inQuote = false;
+          else cur += ch;
+        } else {
+          if (ch === '"') inQuote = true;
+          else if (ch === ',') { cells.push(cur); cur = ""; }
+          else cur += ch;
+        }
+      }
+      cells.push(cur);
+      rows.push(cells);
+    }
+    return rows;
+  }
+
+  async function importCSV(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setImporting(true);
+    try {
+      const text = await file.text();
+      // BOM temizle
+      const clean = text.startsWith("\uFEFF") ? text.slice(1) : text;
+      const [headerRow, ...dataRows] = parseCSV(clean);
+      if (!headerRow) { toast.error("CSV boş"); return; }
+
+      // Kolon indekslerini bul (büyük/küçük harf bağımsız)
+      const h = headerRow.map((c) => c.trim().toLowerCase());
+      const idx = {
+        company:  h.indexOf("şirket"),
+        region:   h.indexOf("bölge"),
+        computer: h.indexOf("bilgisayar"),
+        name:     h.indexOf("ad"),
+        tool:     h.indexOf("araç"),
+        remoteId: h.indexOf("remote id"),
+        password: h.indexOf("şifre"),
+        notes:    h.indexOf("not"),
+      };
+
+      if (idx.name < 0 || idx.remoteId < 0) {
+        toast.error("CSV formatı tanınmadı — 'Ad' ve 'Remote ID' sütunları gerekli");
+        return;
+      }
+
+      const rows = dataRows
+        .filter((r) => r[idx.remoteId]?.trim())
+        .map((r) => ({
+          companyName:  idx.company  >= 0 ? r[idx.company]?.trim()  ?? "" : "",
+          regionName:   idx.region   >= 0 ? r[idx.region]?.trim()   ?? "" : "",
+          computerName: idx.computer >= 0 ? r[idx.computer]?.trim() ?? "" : "",
+          name:         idx.name     >= 0 ? r[idx.name]?.trim()     ?? "" : "",
+          tool:         idx.tool     >= 0 ? r[idx.tool]?.trim()     ?? "" : "",
+          remoteId:     idx.remoteId >= 0 ? r[idx.remoteId]?.trim() ?? "" : "",
+          password:     idx.password >= 0 ? r[idx.password]?.trim() ?? "" : "",
+          notes:        idx.notes    >= 0 ? r[idx.notes]?.trim()    ?? "" : "",
+        }));
+
+      if (rows.length === 0) { toast.error("İçe aktarılacak satır bulunamadı"); return; }
+
+      const res  = await fetch("/api/connections/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`${json.data.created} bağlantı içe aktarıldı${json.data.skipped ? `, ${json.data.skipped} atlandı` : ""}`);
+        fetchConnections();
+      } else {
+        toast.error(json.error ?? "İçe aktarma başarısız");
+      }
+    } catch {
+      toast.error("İçe aktarma başarısız");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -340,6 +395,20 @@ export default function ConnectionsPage() {
             : <Download className="mr-2 h-4 w-4" />}
           Excel'e Aktar
         </Button>
+
+        <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={importing}>
+          {importing
+            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            : <Upload className="mr-2 h-4 w-4" />}
+          CSV'den İçe Aktar
+        </Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={importCSV}
+        />
 
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
