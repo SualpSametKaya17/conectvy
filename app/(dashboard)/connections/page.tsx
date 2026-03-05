@@ -47,7 +47,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import * as XLSX from "xlsx";
 import { ConnectionForm } from "@/components/connections/ConnectionForm";
 import { formatDate, getToolLabel, CONNECTION_TOOLS } from "@/lib/utils";
 import type { CreateConnectionInput } from "@/lib/validations/connection";
@@ -287,22 +286,18 @@ export default function ConnectionsPage() {
         return row;
       });
 
-      // XLSX oluştur
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
-
-      // Sütun genişlikleri
-      ws["!cols"] = [
-        { wch: 30 }, // Şirket
-        { wch: 20 }, // Bölge
-        { wch: 25 }, // Not
-        ...Array.from({ length: (maxAD + maxRD) * 2 }, (_, i) =>
-          i % 2 === 0 ? { wch: 16 } : { wch: 14 }  // No | Şifre
-        ),
-      ];
-
-      XLSX.utils.book_append_sheet(wb, ws, "Bağlantılar");
-      XLSX.writeFile(wb, `baglantilar_${new Date().toISOString().split("T")[0]}.xlsx`);
+      // CSV oluştur
+      const csvRows = [header, ...dataRows].map((row) =>
+        row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
+      );
+      const csvContent = "\uFEFF" + csvRows.join("\r\n"); // BOM for Excel UTF-8
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `baglantilar_${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
       toast.success(`${map.size} firma dışa aktarıldı`);
     } catch {
       toast.error("Dışa aktarma başarısız");
