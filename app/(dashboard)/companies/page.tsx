@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DatePicker } from "@/components/ui/date-picker";
 import { CreateCompanySchema, type CreateCompanyInput } from "@/lib/validations/company";
 import {
   loadMaintenanceSettings,
@@ -268,7 +269,11 @@ function CompanyForm({
                 <FormItem>
                   <FormLabel>Başlangıç Tarihi</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} value={field.value ?? ""} />
+                    <DatePicker
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      placeholder="Başlangıç tarihi seç..."
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -281,7 +286,11 @@ function CompanyForm({
                 <FormItem>
                   <FormLabel>Bitiş Tarihi</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} value={field.value ?? ""} />
+                    <DatePicker
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      placeholder="Bitiş tarihi seç..."
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

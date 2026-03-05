@@ -7,7 +7,7 @@ const dateOrderRefinement = (start: string | null | undefined, end: string | nul
 
 const DATE_ORDER_ERROR = {
   message: "Başlangıç tarihi bitiş tarihinden sonra olamaz",
-  path: ["maintenanceStartDate"] as const,
+  path: ["maintenanceStartDate"],
 };
 
 const BaseCompanySchema = z.object({

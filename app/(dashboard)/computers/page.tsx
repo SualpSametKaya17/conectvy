@@ -731,10 +731,9 @@ export default function ComputersPage() {
                       />
                       <span className="font-medium">{computer.name}</span>
                       {computer.notes && (
-                        <StickyNote
-                          className="h-3.5 w-3.5 shrink-0 text-amber-500"
-                          title={computer.notes}
-                        />
+                        <span title={computer.notes} className="shrink-0">
+                          <StickyNote className="h-3.5 w-3.5 text-amber-500" />
+                        </span>
                       )}
                     </div>
                   </TableCell>
