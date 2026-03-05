@@ -573,6 +573,7 @@ export default function ComputersPage() {
   const [editingComputer, setEditingComputer] = useState<Computer | null>(null);
   const [editingConnections, setEditingConnections] = useState<ConnRow[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [notesViewComputer, setNotesViewComputer] = useState<Computer | null>(null);
 
   const fetchComputers = useCallback(async () => {
     setLoading(true);
@@ -731,9 +732,13 @@ export default function ComputersPage() {
                       />
                       <span className="font-medium">{computer.name}</span>
                       {computer.notes && (
-                        <span title={computer.notes} className="shrink-0">
-                          <StickyNote className="h-3.5 w-3.5 text-amber-500" />
-                        </span>
+                        <button
+                          onClick={() => setNotesViewComputer(computer)}
+                          className="shrink-0 focus:outline-none"
+                          title="Notu görüntüle"
+                        >
+                          <StickyNote className="h-3.5 w-3.5 text-amber-500 hover:text-amber-600 transition-colors" />
+                        </button>
                       )}
                     </div>
                   </TableCell>
@@ -749,8 +754,18 @@ export default function ComputersPage() {
                       total={computer._count.connections}
                     />
                   </TableCell>
-                  <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[180px] truncate">
-                    {computer.description ?? "—"}
+                  <TableCell className="hidden lg:table-cell max-w-[180px]">
+                    {computer.description ? (
+                      <button
+                        onClick={() => setNotesViewComputer(computer)}
+                        className="text-sm text-muted-foreground truncate block w-full text-left hover:text-foreground transition-colors"
+                        title={computer.description}
+                      >
+                        {computer.description}
+                      </button>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
                     {formatDate(computer.updatedAt)}
@@ -839,6 +854,35 @@ export default function ComputersPage() {
               fetchComputers();
             }}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Notes / Description View Dialog */}
+      <Dialog open={notesViewComputer !== null} onOpenChange={(open) => { if (!open) setNotesViewComputer(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DeviceIcon type={notesViewComputer?.deviceType ?? "COMPUTER"} className="h-4 w-4 text-muted-foreground" />
+              {notesViewComputer?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {notesViewComputer?.description && (
+              <div className="rounded-lg border bg-muted/40 p-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Açıklama</p>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{notesViewComputer.description}</p>
+              </div>
+            )}
+            {notesViewComputer?.notes && (
+              <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 p-4">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-2 uppercase tracking-wide flex items-center gap-1.5">
+                  <StickyNote className="h-3.5 w-3.5" />
+                  Notlar
+                </p>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{notesViewComputer.notes}</p>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
