@@ -48,6 +48,7 @@ export async function GET(request: Request) {
           comp.name       AS companyName,
           co.name,
           co.description,
+          co.notes,
           co.is_active    AS isActive,
           co.created_at   AS createdAt,
           co.updated_at   AS updatedAt,
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
       deviceType:  r.deviceType,
       name:        r.name,
       description: r.description,
+      notes:       r.notes ?? null,
       isActive:    r.isActive,
       createdAt:   r.createdAt,
       updatedAt:   r.updatedAt,
@@ -101,7 +103,7 @@ export async function POST(request: Request) {
     const parsed = CreateComputerSchema.safeParse(body);
     if (!parsed.success) return apiValidationError(parsed.error);
 
-    const { deviceType, companyId, name, description } = parsed.data;
+    const { deviceType, companyId, name, description, notes } = parsed.data;
     const pool = await getPool();
 
     const company = await pool.request()
@@ -114,13 +116,14 @@ export async function POST(request: Request) {
       .input("companyId",   sql.Int,      companyId)
       .input("name",        sql.NVarChar, name)
       .input("description", sql.NVarChar, description || null)
+      .input("notes",       sql.NVarChar, notes       || null)
       .query(`
-        INSERT INTO computers (device_type, company_id, name, description)
+        INSERT INTO computers (device_type, company_id, name, description, notes)
         OUTPUT INSERTED.id, INSERTED.device_type AS deviceType,
                INSERTED.company_id AS companyId, INSERTED.name,
-               INSERTED.description, INSERTED.is_active AS isActive,
+               INSERTED.description, INSERTED.notes, INSERTED.is_active AS isActive,
                INSERTED.created_at AS createdAt, INSERTED.updated_at AS updatedAt
-        VALUES (@deviceType, @companyId, @name, @description)
+        VALUES (@deviceType, @companyId, @name, @description, @notes)
       `);
 
     return apiSuccess(result.recordset[0], 201);

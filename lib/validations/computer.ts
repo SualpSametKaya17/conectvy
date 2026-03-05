@@ -14,6 +14,11 @@ export const CreateComputerSchema = z.object({
     .max(1000, "Açıklama en fazla 1000 karakter olabilir")
     .optional()
     .or(z.literal("")),
+  notes: z
+    .string()
+    .max(5000, "Not en fazla 5000 karakter olabilir")
+    .optional()
+    .or(z.literal("")),
 });
 
 export const UpdateComputerSchema = CreateComputerSchema.partial();

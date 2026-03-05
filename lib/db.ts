@@ -63,6 +63,16 @@ async function getPool(): Promise<sql.ConnectionPool> {
     // Hata olursa sessizce geç — kolonlar zaten mevcut olabilir
   }
 
+  try {
+    await pool.request().query(`
+      IF OBJECT_ID('computers','U') IS NOT NULL AND
+         NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('computers') AND name = 'notes')
+        ALTER TABLE computers ADD notes NVARCHAR(MAX) NULL;
+    `);
+  } catch {
+    // Hata olursa sessizce geç
+  }
+
   // ── Performance indexes (idempotent) ─────────────────────────────────────
   const indexes: [string, string][] = [
     [

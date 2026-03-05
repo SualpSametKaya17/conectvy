@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud, X, Copy, ChevronDown, KeyRound, Loader2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Monitor, Server, Cloud, X, Copy, ChevronDown, KeyRound, Loader2, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +56,7 @@ interface Computer {
   deviceType: string;
   name: string;
   description: string | null;
+  notes: string | null;
   company: { id: number; name: string };
   _count: { connections: number; rustdesk: number; anydesk: number };
   updatedAt: string;
@@ -235,6 +236,7 @@ function ComputerForm({
       companyId:   item?.company.id ?? 0,
       name:        item?.name ?? "",
       description: item?.description ?? "",
+      notes:       item?.notes ?? "",
     },
   });
 
@@ -414,6 +416,26 @@ function ComputerForm({
                 <Textarea
                   placeholder="Cihaz hakkında notlar..."
                   rows={2}
+                  {...field}
+                  value={field.value ?? ""}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Notlar */}
+        <FormField
+          control={form.control}
+          name="notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Notlar</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Özel notlar, yapılandırma bilgileri, hatırlatmalar..."
+                  rows={4}
                   {...field}
                   value={field.value ?? ""}
                 />
@@ -708,6 +730,12 @@ export default function ComputersPage() {
                         className="h-4 w-4 text-muted-foreground shrink-0"
                       />
                       <span className="font-medium">{computer.name}</span>
+                      {computer.notes && (
+                        <StickyNote
+                          className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                          title={computer.notes}
+                        />
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">

@@ -18,7 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .query(`
       SELECT co.id, co.device_type AS deviceType,
              co.company_id AS companyId, comp.name AS companyName,
-             co.name, co.description, co.is_active AS isActive,
+             co.name, co.description, co.notes, co.is_active AS isActive,
              co.created_at AS createdAt, co.updated_at AS updatedAt,
              (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1)                           AS connectionCount,
              (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1 AND cn.tool = 'RUSTDESK') AS rustdeskCount,
@@ -56,6 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (update.data.companyId   !== undefined) { sets.push("company_id = @companyId");     req.input("companyId",   sql.Int,      update.data.companyId); }
     if (update.data.name        !== undefined) { sets.push("name = @name");                req.input("name",        sql.NVarChar, update.data.name); }
     if (update.data.description !== undefined) { sets.push("description = @description"); req.input("description", sql.NVarChar, update.data.description || null); }
+    if (update.data.notes       !== undefined) { sets.push("notes = @notes");             req.input("notes",       sql.NVarChar, update.data.notes       || null); }
 
     if (sets.length === 0) return apiError("Güncellenecek alan yok", 400);
 
@@ -66,7 +67,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .query(`
         SELECT co.id, co.device_type AS deviceType,
                co.company_id AS companyId, comp.name AS companyName,
-               co.name, co.description, co.is_active AS isActive,
+               co.name, co.description, co.notes, co.is_active AS isActive,
                co.created_at AS createdAt, co.updated_at AS updatedAt
         FROM computers co
         JOIN companies comp ON comp.id = co.company_id
