@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/utils";
 
 /**
@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const pool = await getPool();
 
-    const [stats, recent, tools] = await Promise.all([
+    const [stats, recent, tools, maintenance] = await Promise.all([
       // Stat counts
       pool.request().query<{
         totalConnections: number;
@@ -45,6 +45,19 @@ export async function GET() {
         WHERE is_active = 1
         GROUP BY tool
       `),
+
+      // Bakım süresi dolan / yaklaşan firmalar (son 30 gün + önümüzdeki 60 gün)
+      pool.request().query(`
+        SELECT TOP 10
+          id, name,
+          maintenance_end_date AS maintenanceEndDate,
+          DATEDIFF(day, GETDATE(), maintenance_end_date) AS daysLeft
+        FROM companies
+        WHERE is_active = 1
+          AND maintenance_end_date IS NOT NULL
+          AND maintenance_end_date BETWEEN DATEADD(day, -30, GETDATE()) AND DATEADD(day, 60, GETDATE())
+        ORDER BY maintenance_end_date ASC
+      `),
     ]);
 
     const s = stats.recordset[0];
@@ -64,6 +77,13 @@ export async function GET() {
       count: row.cnt,
     }));
 
+    const maintenanceAlerts = maintenance.recordset.map((row) => ({
+      id:                 row.id,
+      name:               row.name,
+      maintenanceEndDate: row.maintenanceEndDate,
+      daysLeft:           row.daysLeft as number,
+    }));
+
     return apiSuccess({
       stats: {
         totalConnections:  s.totalConnections,
@@ -74,6 +94,7 @@ export async function GET() {
       },
       recentConnections,
       toolStats,
+      maintenanceAlerts,
     });
   } catch (error) {
     console.error("[GET /api/dashboard]", error);

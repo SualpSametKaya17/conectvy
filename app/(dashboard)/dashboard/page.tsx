@@ -10,9 +10,16 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Monitor, Building2, Map, Wifi } from "lucide-react";
+import { Monitor, Building2, Map, Wifi, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatDate, getToolLabel } from "@/lib/utils";
 import Link from "next/link";
+
+interface MaintenanceAlert {
+  id: number;
+  name: string;
+  maintenanceEndDate: string;
+  daysLeft: number;
+}
 
 interface DashboardData {
   stats: {
@@ -31,6 +38,7 @@ interface DashboardData {
     region: { name: string } | null;
   }>;
   toolStats: Array<{ tool: string; count: number }>;
+  maintenanceAlerts: MaintenanceAlert[];
 }
 
 async function getDashboardData(): Promise<DashboardData | null> {
@@ -52,38 +60,60 @@ const toolVariant: Record<string, "default" | "secondary" | "outline"> = {
   OTHER: "outline",
 };
 
+function MaintenanceBadge({ daysLeft }: { daysLeft: number }) {
+  if (daysLeft < 0)
+    return <Badge variant="destructive">Süresi doldu ({Math.abs(daysLeft)} gün önce)</Badge>;
+  if (daysLeft === 0)
+    return <Badge variant="destructive">Bugün bitiyor</Badge>;
+  if (daysLeft <= 14)
+    return <Badge variant="destructive">{daysLeft} gün kaldı</Badge>;
+  if (daysLeft <= 30)
+    return <Badge className="bg-orange-500 hover:bg-orange-600 text-white">{daysLeft} gün kaldı</Badge>;
+  return <Badge variant="outline" className="text-yellow-600 border-yellow-400">{daysLeft} gün kaldı</Badge>;
+}
+
 export default async function DashboardPage() {
   const data = await getDashboardData();
+  const alerts = data?.maintenanceAlerts ?? [];
 
   const statCards = [
-    {
-      label: "Toplam Bağlantı",
-      value: data?.stats.totalConnections ?? "—",
-      icon: Monitor,
-      href: "/connections",
-    },
-    {
-      label: "Aktif Bağlantı",
-      value: data?.stats.activeConnections ?? "—",
-      icon: Wifi,
-      href: "/connections",
-    },
-    {
-      label: "Firma",
-      value: data?.stats.totalCompanies ?? "—",
-      icon: Building2,
-      href: "/companies",
-    },
-    {
-      label: "Bölge",
-      value: data?.stats.totalRegions ?? "—",
-      icon: Map,
-      href: "/regions",
-    },
+    { label: "Toplam Bağlantı", value: data?.stats.totalConnections ?? "—", icon: Monitor,   href: "/connections" },
+    { label: "Aktif Bağlantı",  value: data?.stats.activeConnections ?? "—", icon: Wifi,      href: "/connections" },
+    { label: "Firma",           value: data?.stats.totalCompanies    ?? "—", icon: Building2, href: "/companies"   },
+    { label: "Bölge",           value: data?.stats.totalRegions      ?? "—", icon: Map,       href: "/regions"     },
   ];
 
   return (
     <div className="space-y-6">
+      {/* Bakım Uyarıları */}
+      {alerts.length > 0 && (
+        <Card className="border-orange-300 dark:border-orange-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-orange-600 dark:text-orange-400">
+              <AlertTriangle className="h-4 w-4" />
+              Bakım Sözleşmesi Uyarıları
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {alerts.map((a) => (
+                <div key={a.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                  <Link href="/companies" className="font-medium hover:underline">
+                    {a.name}
+                  </Link>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(a.maintenanceEndDate).toLocaleDateString("tr-TR")}
+                    </span>
+                    <MaintenanceBadge daysLeft={a.daysLeft} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stat Cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {statCards.map(({ label, value, icon: Icon, href }) => (
@@ -152,12 +182,16 @@ export default async function DashboardPage() {
               <div className="space-y-3">
                 {data.toolStats.map(({ tool, count }) => (
                   <div key={tool} className="flex items-center justify-between">
-                    <Badge variant={toolVariant[tool] ?? "outline"}>
-                      {getToolLabel(tool)}
-                    </Badge>
+                    <Badge variant={toolVariant[tool] ?? "outline"}>{getToolLabel(tool)}</Badge>
                     <span className="text-sm font-semibold">{count}</span>
                   </div>
                 ))}
+              </div>
+            )}
+            {alerts.length === 0 && (
+              <div className="mt-4 flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Bakım uyarısı yok</span>
               </div>
             )}
           </CardContent>

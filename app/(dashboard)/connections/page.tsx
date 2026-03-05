@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Copy, Eye, EyeOff } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Copy, Eye, EyeOff, MonitorPlay, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,12 @@ import {
 import { ConnectionForm } from "@/components/connections/ConnectionForm";
 import { formatDate, getToolLabel, CONNECTION_TOOLS } from "@/lib/utils";
 import type { CreateConnectionInput } from "@/lib/validations/connection";
+
+function getConnectUrl(tool: string, remoteId: string): string | null {
+  if (tool === "RUSTDESK") return `rustdesk://${remoteId}`;
+  if (tool === "ANYDESK")  return `anydesk:${remoteId}`;
+  return null;
+}
 
 interface Connection {
   id: number;
@@ -94,7 +100,9 @@ export default function ConnectionsPage() {
 
   // Visible password cell
   const [visiblePassId, setVisiblePassId] = useState<number | null>(null);
-  const [passwords, setPasswords] = useState<Record<number, string>>({});
+  const [passwords, setPasswords]         = useState<Record<number, string>>({});
+  const [connectingId, setConnectingId]   = useState<number | null>(null);
+  const [exporting, setExporting]         = useState(false);
 
   const fetchConnections = useCallback(async () => {
     setLoading(true);
@@ -190,6 +198,74 @@ export default function ConnectionsPage() {
     toast.success("Remote ID kopyalandı");
   }
 
+  async function connectToRemote(conn: Connection) {
+    setConnectingId(conn.id);
+    try {
+      let pwd = passwords[conn.id];
+      if (!pwd) {
+        const res  = await fetch(`/api/connections/${conn.id}`);
+        const json = await res.json();
+        if (json.success) {
+          pwd = json.data.password ?? "";
+          setPasswords((p) => ({ ...p, [conn.id]: pwd }));
+        }
+      }
+      const url = getConnectUrl(conn.tool, conn.remoteId);
+      if (url) window.open(url, "_self");
+      else await navigator.clipboard.writeText(conn.remoteId);
+      await fetch(`/api/connections/${conn.id}/connect`, { method: "POST" }).catch(() => {});
+      toast.success(`${getToolLabel(conn.tool)} açılıyor — ${conn.remoteId}`);
+    } catch {
+      toast.error("Bağlantı açılamadı");
+    } finally {
+      setConnectingId(null);
+    }
+  }
+
+  async function exportCSV() {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({
+        pageSize: "10000",
+        ...(search              ? { search }             : {}),
+        ...(toolFilter !== "ALL" ? { tool: toolFilter }  : {}),
+      });
+      const res  = await fetch(`/api/connections?${params}`);
+      const json = await res.json();
+      if (!json.success) return;
+
+      const rows = json.data.items;
+      const header = ["Ad", "Araç", "Remote ID", "Bilgisayar", "Firma", "Bölge", "Güncelleme"];
+      const lines  = [
+        header.join(";"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...rows.map((r: any) =>
+          [
+            `"${r.name}"`,
+            r.tool,
+            r.remoteId,
+            `"${r.computer?.name ?? ""}"`,
+            `"${r.company?.name  ?? ""}"`,
+            `"${r.region?.name   ?? ""}"`,
+            formatDate(r.updatedAt),
+          ].join(";")
+        ),
+      ];
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `baglantilar_${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${rows.length} kayıt dışa aktarıldı`);
+    } catch {
+      toast.error("Dışa aktarma başarısız");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -217,6 +293,13 @@ export default function ConnectionsPage() {
             ))}
           </SelectContent>
         </Select>
+
+        <Button variant="outline" onClick={exportCSV} disabled={exporting}>
+          {exporting
+            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            : <Download className="mr-2 h-4 w-4" />}
+          Dışa Aktar
+        </Button>
 
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
@@ -306,6 +389,17 @@ export default function ConnectionsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => connectToRemote(conn)}
+                          disabled={connectingId === conn.id}
+                          className="text-primary focus:text-primary"
+                        >
+                          {connectingId === conn.id
+                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            : <MonitorPlay className="mr-2 h-4 w-4" />}
+                          Bağlan
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => openEdit(conn)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           Düzenle

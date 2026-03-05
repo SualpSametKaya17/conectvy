@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Bell, Menu, X } from "lucide-react";
+import { Bell, Menu, X, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarNav } from "./SidebarNav";
+import { useTheme } from "@/components/theme-provider";
 
 const pageTitles: Record<string, string> = {
   "/dashboard":   "Dashboard",
@@ -25,6 +26,7 @@ export function Header() {
   const pathname  = usePathname();
   const title     = getPageTitle(pathname);
   const [open, setOpen] = useState(false);
+  const { dark, toggle } = useTheme();
 
   return (
     <>
@@ -44,6 +46,9 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2 titlebar-no-drag">
+          <Button variant="ghost" size="icon" onClick={toggle} aria-label="Tema değiştir">
+            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
           <Button variant="ghost" size="icon" aria-label="Bildirimler">
             <Bell className="h-4 w-4" />
           </Button>
