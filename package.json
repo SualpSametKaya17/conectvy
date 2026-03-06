@@ -10,7 +10,7 @@
     "lint": "next lint",
     "electron:compile": "tsc -p electron/tsconfig.json",
     "electron:dev": "npm run electron:compile && concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "npm run electron:compile && next build && electron-builder --win"
+    "electron:build": "npm run electron:compile && cross-env ELECTRON_BUILD=1 next build && electron-builder --win"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",

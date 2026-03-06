@@ -63,7 +63,10 @@ function startNextServer(): Promise<void> {
     const appRoot = path.join(process.resourcesPath, "app");
     const serverScript = path.join(appRoot, "server.js");
 
-    nextServer = spawn("node", [serverScript], {
+    // Node.js binary: ortam değişkeninden, yoksa PATH'teki node
+    const nodeBin = process.env.ELECTRON_NODE_BIN ?? "node";
+
+    nextServer = spawn(nodeBin, [serverScript], {
       env: {
         ...process.env,
         PORT: String(PROD_PORT),
@@ -73,24 +76,53 @@ function startNextServer(): Promise<void> {
       cwd: appRoot,
     });
 
+    let resolved = false;
+
     nextServer.stdout?.on("data", (data: Buffer) => {
       const msg = data.toString();
       console.log("[next-server]", msg);
-      // Wait until Next.js says it's ready
-      if (msg.includes("Ready") || msg.includes("started server")) resolve();
+      if (!resolved && (msg.includes("Ready") || msg.includes("started server"))) {
+        resolved = true;
+        resolve();
+      }
     });
 
     nextServer.stderr?.on("data", (d: Buffer) => console.error("[next-server:err]", d.toString()));
-    nextServer.on("error", reject);
+
+    nextServer.on("error", (err) => {
+      console.error("[next-server] başlatılamadı:", err.message);
+      if (!resolved) { resolved = true; reject(err); }
+    });
+
+    nextServer.on("exit", (code) => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error(`Next.js sunucusu beklenmedik çıkış yaptı (kod: ${code})`));
+      }
+    });
 
     // Timeout fallback
-    setTimeout(resolve, 8000);
+    setTimeout(() => { if (!resolved) { resolved = true; resolve(); } }, 10_000);
   });
 }
 
 app.on("ready", async () => {
   if (!isDev) {
-    await startNextServer().catch(console.error);
+    try {
+      await startNextServer();
+    } catch (err) {
+      console.error("[main] Sunucu hatası:", err);
+      // Pencereyi aç, hata sayfası göster
+      createWindow();
+      mainWindow?.loadURL(
+        `data:text/html,<h2 style="font-family:sans-serif;padding:40px;color:#c00">
+          Sunucu başlatılamadı.<br><br>
+          <small>${String(err)}</small><br><br>
+          <small>Node.js kurulu ve PATH'te olduğundan emin olun.</small>
+        </h2>`
+      );
+      return;
+    }
   }
   createWindow();
 });
