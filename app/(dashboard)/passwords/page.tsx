@@ -190,7 +190,7 @@ function PasswordForm({
           <FormItem>
             <FormLabel>Kullanıcı Adı / E-posta</FormLabel>
             <FormControl>
-              <Input placeholder="user@example.com" {...field} value={field.value ?? ""} />
+              <Input placeholder="kullanıcıadı veya e-posta" {...field} value={field.value ?? ""} />
             </FormControl>
             <FormMessage />
           </FormItem>
