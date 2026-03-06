@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Monitor,
@@ -11,6 +11,7 @@ import {
   Wifi,
   Cpu,
   KeyRound,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -44,6 +45,13 @@ interface SidebarNavProps {
 
 export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
+  const router   = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -85,8 +93,15 @@ export function SidebarNav({ onNavigate }: SidebarNavProps) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t px-4 py-3 shrink-0">
-        <p className="text-[11px] text-muted-foreground">
+      <div className="border-t px-4 py-3 shrink-0 space-y-2">
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          Çıkış Yap
+        </button>
+        <p className="text-[11px] text-muted-foreground px-3">
           v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.1.0"}
         </p>
       </div>

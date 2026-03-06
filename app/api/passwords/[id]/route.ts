@@ -1,13 +1,20 @@
 import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
 import { UpdatePasswordSchema } from "@/lib/validations/password";
+import { encrypt, decrypt } from "@/lib/crypto";
 
 function getId(params: { id: string }): number | null {
   const n = parseInt(params.id, 10);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-/** GET /api/passwords/:id  (şifre dahil) */
+function safeDecrypt(ciphertext: string | null): string | null {
+  if (!ciphertext) return null;
+  try { return decrypt(ciphertext); }
+  catch { return ciphertext; } // Eski plain-text kayıtlar için fallback
+}
+
+/** GET /api/passwords/:id  (şifre dahil, çözümlenmiş) */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const id = getId(await params);
   if (!id) return apiError("Geçerli bir ID giriniz", 400);
@@ -24,7 +31,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const row = result.recordset[0];
   if (!row) return apiError("Kayıt bulunamadı", 404);
-  return apiSuccess(row);
+
+  return apiSuccess({ ...row, password: safeDecrypt(row.password) });
 }
 
 /** PATCH /api/passwords/:id */
@@ -42,7 +50,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (update.data.title    !== undefined) { sets.push("title = @title");       r.input("title",    sql.NVarChar, update.data.title); }
   if (update.data.username !== undefined) { sets.push("username = @username"); r.input("username", sql.NVarChar, update.data.username || null); }
-  if (update.data.password !== undefined) { sets.push("password = @password"); r.input("password", sql.NVarChar, update.data.password || null); }
+  if (update.data.password !== undefined) {
+    const enc = update.data.password ? encrypt(update.data.password) : null;
+    sets.push("password = @password");
+    r.input("password", sql.NVarChar, enc);
+  }
   if (update.data.url      !== undefined) { sets.push("url = @url");           r.input("url",      sql.NVarChar, update.data.url      || null); }
   if (update.data.category !== undefined) { sets.push("category = @category"); r.input("category", sql.NVarChar, update.data.category || "Genel"); }
   if (update.data.notes    !== undefined) { sets.push("notes = @notes");       r.input("notes",    sql.NVarChar, update.data.notes    || null); }

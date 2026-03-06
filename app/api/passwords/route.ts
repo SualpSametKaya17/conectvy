@@ -1,6 +1,7 @@
 import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError, apiValidationError } from "@/lib/utils";
 import { CreatePasswordSchema } from "@/lib/validations/password";
+import { encrypt } from "@/lib/crypto";
 
 /** GET /api/passwords */
 export async function GET(req: Request) {
@@ -34,9 +35,10 @@ export async function GET(req: Request) {
       .input("search",   sql.NVarChar, `%${search}%`)
       .input("category", sql.NVarChar, category || null)
       .query(`
-        SELECT COUNT(*) AS total
-        FROM passwords
-        WHERE ${where.replace("@category", "ISNULL(@category, category)")}
+        SELECT COUNT(*) AS total FROM passwords
+        WHERE is_active = 1
+          ${search   ? "AND (title LIKE @search OR username LIKE @search OR url LIKE @search OR notes LIKE @search)" : ""}
+          ${category ? "AND category = @category" : ""}
       `),
   ]);
 
@@ -55,12 +57,15 @@ export async function POST(req: Request) {
   if (!parsed.success) return apiValidationError(parsed.error);
 
   const { title, username, password, url, category, notes } = parsed.data;
-  const pool = await getPool();
 
+  // Şifreyi çift katmanlı şifrele (boşsa null bırak)
+  const encryptedPassword = password ? encrypt(password) : null;
+
+  const pool = await getPool();
   const result = await pool.request()
     .input("title",    sql.NVarChar, title)
     .input("username", sql.NVarChar, username  || null)
-    .input("password", sql.NVarChar, password  || null)
+    .input("password", sql.NVarChar, encryptedPassword)
     .input("url",      sql.NVarChar, url       || null)
     .input("category", sql.NVarChar, category  || "Genel")
     .input("notes",    sql.NVarChar, notes     || null)
