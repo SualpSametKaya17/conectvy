@@ -12,6 +12,7 @@
 import { app, BrowserWindow, shell, ipcMain, utilityProcess } from "electron";
 import type { UtilityProcess } from "electron";
 import path from "path";
+import http from "http";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const DEV_SERVER_URL = "http://localhost:3000";
@@ -77,6 +78,36 @@ function showError(message: string) {
 }
 
 /**
+ * Sunucunun gerçekten cevap verip vermediğini HTTP isteğiyle kontrol eder.
+ * stdout parse yerine bu yöntem çok daha güvenilirdir.
+ */
+function waitForServer(port: number, timeout = 30_000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+
+    function tryConnect() {
+      const req = http.get(`http://127.0.0.1:${port}`, (res) => {
+        res.resume(); // yanıtı tüket
+        resolve();
+      });
+
+      req.setTimeout(1000);
+      req.on("error", () => {
+        if (Date.now() - start > timeout) {
+          reject(new Error(`Sunucu ${timeout / 1000} saniye içinde başlamadı`));
+        } else {
+          setTimeout(tryConnect, 500);
+        }
+      });
+
+      req.end();
+    }
+
+    tryConnect();
+  });
+}
+
+/**
  * Üretim modunda Next.js standalone sunucusunu Electron'un kendi
  * Node.js runtime'ı ile başlatır (kullanıcı makinesinde Node.js gerekmez).
  */
@@ -96,20 +127,8 @@ function startNextServer(): Promise<void> {
       stdio: "pipe",
     });
 
-    let resolved = false;
-
     nextServerProcess.stdout?.on("data", (data: Buffer) => {
-      const msg = data.toString();
-      console.log("[next-server]", msg);
-      if (
-        !resolved &&
-        (msg.includes("Ready") ||
-          msg.includes("started server") ||
-          msg.includes("Listening"))
-      ) {
-        resolved = true;
-        resolve();
-      }
+      console.log("[next-server]", data.toString());
     });
 
     nextServerProcess.stderr?.on("data", (d: Buffer) =>
@@ -118,19 +137,13 @@ function startNextServer(): Promise<void> {
 
     nextServerProcess.on("exit", (code) => {
       console.error(`[next-server] çıktı (kod: ${code})`);
-      if (!resolved) {
-        resolved = true;
-        reject(new Error(`Next.js sunucusu başlamadan çıktı (kod: ${code})`));
-      }
+      reject(new Error(`Next.js sunucusu başlamadan çıktı (kod: ${code})`));
     });
 
-    // 15 sn içinde Ready gelmezse devam et (yavaş makineler için)
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        resolve();
-      }
-    }, 15_000);
+    // Süreci başlat, ardından HTTP ile hazır olup olmadığını kontrol et
+    waitForServer(PROD_PORT, 30_000)
+      .then(resolve)
+      .catch(reject);
   });
 }
 
