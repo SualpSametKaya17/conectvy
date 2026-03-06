@@ -45,13 +45,31 @@ function createWindow() {
         electron_1.shell.openExternal(url);
         return { action: "deny" };
     });
+    // localhost yerine 127.0.0.1 kullanıyoruz: Windows'ta localhost → ::1 (IPv6)
+    // resolve edilebildiği için sunucu IPv4'te dinliyorsa bağlantı kurulamaz.
+    const PROD_URL = `http://127.0.0.1:${PROD_PORT}`;
     if (isDev) {
         mainWindow.loadURL(DEV_SERVER_URL);
         mainWindow.webContents.openDevTools({ mode: "detach" });
     }
     else {
-        mainWindow.loadURL(`http://localhost:${PROD_PORT}`);
+        mainWindow.loadURL(PROD_URL);
     }
+    // Yükleme başarısız olursa (sunucu henüz hazır değilse) 1.5sn sonra tekrar dene
+    mainWindow.webContents.on("did-fail-load", (_e, errorCode, errorDesc) => {
+        console.warn("[main] Sayfa yüklenemedi:", errorCode, errorDesc);
+        if (!isDev) {
+            setTimeout(() => mainWindow?.loadURL(PROD_URL), 1500);
+        }
+    });
+    // F12 ile DevTools aç (production'da teşhis için)
+    mainWindow.webContents.on("before-input-event", (_e, input) => {
+        if (input.key === "F12" && input.type === "keyDown") {
+            mainWindow?.webContents.isDevToolsOpened()
+                ? mainWindow.webContents.closeDevTools()
+                : mainWindow?.webContents.openDevTools({ mode: "detach" });
+        }
+    });
     mainWindow.on("closed", () => {
         mainWindow = null;
     });
@@ -77,14 +95,24 @@ function showError(message) {
 function waitForServer(port, timeout = 30000) {
     return new Promise((resolve, reject) => {
         const start = Date.now();
+        let settled = false;
         function tryConnect() {
+            if (settled)
+                return;
             const req = http_1.default.get(`http://127.0.0.1:${port}`, (res) => {
-                res.resume(); // yanıtı tüket
-                resolve();
+                res.resume();
+                if (!settled) {
+                    settled = true;
+                    resolve();
+                }
             });
-            req.setTimeout(1000);
+            // Socket timeout: yanıt gelmezse isteği kapat ve tekrar dene
+            req.setTimeout(2000, () => { req.destroy(); });
             req.on("error", () => {
+                if (settled)
+                    return;
                 if (Date.now() - start > timeout) {
+                    settled = true;
                     reject(new Error(`Sunucu ${timeout / 1000} saniye içinde başlamadı`));
                 }
                 else {
