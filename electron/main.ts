@@ -14,15 +14,61 @@ import type { UtilityProcess } from "electron";
 import path from "path";
 import http from "http";
 
+// Sadece app.isPackaged kullan — NODE_ENV ortam değişkenine bağımlılık beyaz ekrana neden olur
 const isDev = !app.isPackaged;
 const DEV_SERVER_URL = "http://localhost:3000";
 const PROD_PORT = 3001;
+const PROD_URL = `http://127.0.0.1:${PROD_PORT}`;
 
 let mainWindow: BrowserWindow | null = null;
 let nextServerProcess: UtilityProcess | null = null;
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+// Sunucu başlarken gösterilecek yükleme sayfası
+const LOADING_HTML = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conectvy</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #1a1a1a;
+    }
+    .container { text-align: center; }
+    .spinner {
+      width: 38px;
+      height: 38px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+    p  { font-size: 13px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>Conectvy</h1>
+    <p>Uygulama başlatılıyor, lütfen bekleyin…</p>
+  </div>
+</body>
+</html>`;
+
+// ─── Window ────────────────────────────────────────────────────────────────────
+
+function createWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
@@ -38,50 +84,50 @@ function createWindow() {
     },
   });
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
-  });
+  win.once("ready-to-show", () => win.show());
 
   // Dış linkleri varsayılan tarayıcıda aç
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
 
-  // localhost yerine 127.0.0.1 kullanıyoruz: Windows'ta localhost → ::1 (IPv6)
-  // resolve edilebildiği için sunucu IPv4'te dinliyorsa bağlantı kurulamaz.
-  const PROD_URL = `http://127.0.0.1:${PROD_PORT}`;
-
-  if (isDev) {
-    mainWindow.loadURL(DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools({ mode: "detach" });
-  } else {
-    mainWindow.loadURL(PROD_URL);
-  }
-
-  // Yükleme başarısız olursa (sunucu henüz hazır değilse) 1.5sn sonra tekrar dene
-  mainWindow.webContents.on("did-fail-load", (_e, errorCode, errorDesc) => {
-    console.warn("[main] Sayfa yüklenemedi:", errorCode, errorDesc);
-    if (!isDev) {
-      setTimeout(() => mainWindow?.loadURL(PROD_URL), 1500);
-    }
-  });
-
-  // F12 ile DevTools aç (production'da teşhis için)
-  mainWindow.webContents.on("before-input-event", (_e, input) => {
+  // F12 ile DevTools aç/kapat (production'da teşhis için)
+  win.webContents.on("before-input-event", (_e, input) => {
     if (input.key === "F12" && input.type === "keyDown") {
-      mainWindow?.webContents.isDevToolsOpened()
-        ? mainWindow.webContents.closeDevTools()
-        : mainWindow?.webContents.openDevTools({ mode: "detach" });
+      win.webContents.isDevToolsOpened()
+        ? win.webContents.closeDevTools()
+        : win.webContents.openDevTools({ mode: "detach" });
     }
   });
 
-  mainWindow.on("closed", () => {
-    mainWindow = null;
-  });
+  win.on("closed", () => { mainWindow = null; });
+
+  return win;
 }
 
 function showError(message: string) {
+  const safeMsg = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const html = `<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="UTF-8"><title>Hata</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         padding: 48px; color: #1a1a1a; }
+  h2 { color: #c00; margin-bottom: 12px; }
+  pre { background: #f5f5f5; padding: 12px; border-radius: 6px;
+        font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+  <h2>Uygulama başlatılamadı</h2>
+  <pre>${safeMsg}</pre>
+  <p style="margin-top:12px;color:#64748b;font-size:12px">
+    Detaylar için F12'ye basın veya sistem yöneticinize başvurun.
+  </p>
+</body>
+</html>`;
+
   if (!mainWindow) {
     mainWindow = new BrowserWindow({
       width: 800,
@@ -90,19 +136,16 @@ function showError(message: string) {
       webPreferences: { contextIsolation: true },
     });
   }
-  mainWindow.loadURL(
-    `data:text/html,<h2 style="font-family:sans-serif;padding:40px;color:#c00">` +
-      `Uygulama ba&#351;lat&#305;lamad&#305;.<br><br>` +
-      `<small>${message}</small>` +
-      `</h2>`
-  );
+  mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
 }
 
+// ─── Server ────────────────────────────────────────────────────────────────────
+
 /**
- * Sunucunun gerçekten cevap verip vermediğini HTTP isteğiyle kontrol eder.
- * stdout parse yerine bu yöntem çok daha güvenilirdir.
+ * Sunucunun gerçekten hazır olduğunu HTTP durum kodu ile doğrular.
+ * Sadece 2xx / 3xx yanıt alındığında resolve eder; 5xx'te tekrar dener.
  */
-function waitForServer(port: number, timeout = 30_000): Promise<void> {
+function waitForServer(port: number, timeout = 60_000): Promise<void> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     let settled = false;
@@ -111,12 +154,20 @@ function waitForServer(port: number, timeout = 30_000): Promise<void> {
       if (settled) return;
 
       const req = http.get(`http://127.0.0.1:${port}`, (res) => {
-        res.resume();
-        if (!settled) { settled = true; resolve(); }
+        res.resume(); // belleği boşalt
+        if (!settled) {
+          if (res.statusCode !== undefined && res.statusCode < 500) {
+            // 2xx veya 3xx → sunucu gerçekten hazır
+            settled = true;
+            resolve();
+          } else {
+            // 5xx → Next.js henüz hazır değil, tekrar dene
+            setTimeout(tryConnect, 600);
+          }
+        }
       });
 
-      // Socket timeout: yanıt gelmezse isteği kapat ve tekrar dene
-      req.setTimeout(2000, () => { req.destroy(); });
+      req.setTimeout(3000, () => req.destroy());
 
       req.on("error", () => {
         if (settled) return;
@@ -124,7 +175,7 @@ function waitForServer(port: number, timeout = 30_000): Promise<void> {
           settled = true;
           reject(new Error(`Sunucu ${timeout / 1000} saniye içinde başlamadı`));
         } else {
-          setTimeout(tryConnect, 500);
+          setTimeout(tryConnect, 600);
         }
       });
 
@@ -135,65 +186,102 @@ function waitForServer(port: number, timeout = 30_000): Promise<void> {
   });
 }
 
-/**
- * Üretim modunda Next.js standalone sunucusunu Electron'un kendi
- * Node.js runtime'ı ile başlatır (kullanıcı makinesinde Node.js gerekmez).
- */
 function startNextServer(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const appRoot = path.join(process.resourcesPath, "app");
+    const appRoot      = path.join(process.resourcesPath, "app");
     const serverScript = path.join(appRoot, "server.js");
+
+    console.log("[main] Next.js sunucu başlatılıyor:", serverScript);
 
     nextServerProcess = utilityProcess.fork(serverScript, [], {
       cwd: appRoot,
       env: {
         ...process.env,
-        PORT: String(PROD_PORT),
-        HOSTNAME: "127.0.0.1",
-        NODE_ENV: "production",
+        PORT:      String(PROD_PORT),
+        HOSTNAME:  "127.0.0.1",
+        NODE_ENV:  "production",
       },
       stdio: "pipe",
     });
 
-    nextServerProcess.stdout?.on("data", (data: Buffer) => {
-      console.log("[next-server]", data.toString());
-    });
-
+    nextServerProcess.stdout?.on("data", (d: Buffer) =>
+      console.log("[next-server]", d.toString().trimEnd()));
     nextServerProcess.stderr?.on("data", (d: Buffer) =>
-      console.error("[next-server:err]", d.toString())
-    );
+      console.error("[next-server:err]", d.toString().trimEnd()));
 
-    nextServerProcess.on("exit", (code) => {
-      console.error(`[next-server] çıktı (kod: ${code})`);
-      reject(new Error(`Next.js sunucusu başlamadan çıktı (kod: ${code})`));
+    let resolved = false;
+
+    // Süreç, waitForServer'dan önce çıkarsa hata fırlat
+    nextServerProcess.once("exit", (code) => {
+      console.error(`[next-server] erken çıkış (kod: ${code})`);
+      if (!resolved) {
+        reject(new Error(`Next.js sunucusu başlamadan kapandı (kod: ${code})`));
+      }
     });
 
-    // Süreci başlat, ardından HTTP ile hazır olup olmadığını kontrol et
-    waitForServer(PROD_PORT, 30_000)
-      .then(resolve)
-      .catch(reject);
+    waitForServer(PROD_PORT, 60_000)
+      .then(() => { resolved = true; resolve(); })
+      .catch((err) => { resolved = true; reject(err); });
   });
 }
 
-app.on("ready", async () => {
-  if (!isDev) {
-    try {
-      await startNextServer();
-    } catch (err) {
-      console.error("[main] Sunucu hatası:", err);
-      showError(String(err));
-      return;
-    }
+// ─── App lifecycle ─────────────────────────────────────────────────────────────
 
-    // Pencere oluştuktan SONRA sunucu çökerse hata göster
-    nextServerProcess?.on("exit", (code) => {
-      console.error(`[next-server] başlangıç sonrası çıktı (kod: ${code})`);
-      if (mainWindow) {
-        showError(`Next.js sunucusu beklenmedik şekilde kapandı (kod: ${code})`);
-      }
-    });
+app.on("ready", async () => {
+  mainWindow = createWindow();
+
+  // ── Dev modu ────────────────────────────────────────────────────────────────
+  if (isDev) {
+    mainWindow.loadURL(DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+    return;
   }
-  createWindow();
+
+  // ── Production modu ─────────────────────────────────────────────────────────
+
+  // 1. Önce yükleme ekranını göster (beyaz ekran yerine)
+  mainWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(LOADING_HTML)}`
+  );
+
+  // 2. Next.js sunucusunu başlat
+  try {
+    await startNextServer();
+  } catch (err) {
+    console.error("[main] Sunucu başlatma hatası:", err);
+    showError(String(err));
+    return;
+  }
+
+  // 3. Sunucu hazır → gerçek URL'yi yükle
+  console.log("[main] Sunucu hazır, uygulama yükleniyor:", PROD_URL);
+
+  let retryCount = 0;
+  const MAX_RETRIES = 5;
+
+  const loadApp = () => mainWindow?.loadURL(PROD_URL);
+
+  // Yükleme başarısız olursa sınırlı sayıda yeniden dene
+  mainWindow.webContents.on("did-fail-load", (_e, errorCode, errorDesc) => {
+    console.warn(`[main] Sayfa yüklenemedi (${errorCode}): ${errorDesc}`);
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      console.log(`[main] Yeniden deneniyor (${retryCount}/${MAX_RETRIES})…`);
+      setTimeout(loadApp, 1000);
+    } else {
+      showError(`Sayfa ${MAX_RETRIES} denemeden sonra yüklenemedi.\n\nHata: ${errorDesc}`);
+    }
+  });
+
+  loadApp();
+
+  // 4. Sunucunun sonraki kapanışını izle
+  nextServerProcess?.on("exit", (code) => {
+    console.error(`[next-server] beklenmedik kapanış (kod: ${code})`);
+    if (mainWindow) {
+      showError(`Next.js sunucusu beklenmedik şekilde kapandı (kod: ${code})`);
+    }
+  });
 });
 
 app.on("window-all-closed", () => {
@@ -202,9 +290,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (mainWindow === null) createWindow();
+  if (mainWindow === null) {
+    mainWindow = createWindow();
+  }
 });
 
-// IPC köprüleri
+// ─── IPC köprüleri ─────────────────────────────────────────────────────────────
 ipcMain.handle("app:version", () => app.getVersion());
 ipcMain.handle("app:platform", () => process.platform);
