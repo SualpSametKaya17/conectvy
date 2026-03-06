@@ -14,7 +14,7 @@ import type { UtilityProcess } from "electron";
 import path from "path";
 import http from "http";
 
-const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
+const isDev = !app.isPackaged;
 const DEV_SERVER_URL = "http://localhost:3000";
 const PROD_PORT = 3001;
 
@@ -184,6 +184,14 @@ app.on("ready", async () => {
       showError(String(err));
       return;
     }
+
+    // Pencere oluştuktan SONRA sunucu çökerse hata göster
+    nextServerProcess?.on("exit", (code) => {
+      console.error(`[next-server] başlangıç sonrası çıktı (kod: ${code})`);
+      if (mainWindow) {
+        showError(`Next.js sunucusu beklenmedik şekilde kapandı (kod: ${code})`);
+      }
+    });
   }
   createWindow();
 });
