@@ -190,8 +190,31 @@ function startNextServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     const appRoot      = path.join(process.resourcesPath, "app");
     const serverScript = path.join(appRoot, "server.js");
+    const logFile      = path.join(app.getPath("userData"), "server.log");
 
+    // Log dosyasını sıfırla
+    const fs = require("fs") as typeof import("fs");
+    const writeLog = (line: string) => {
+      try { fs.appendFileSync(logFile, line + "\n", "utf8"); } catch {}
+    };
+
+    writeLog(`=== Conectvy başlatma logu [${new Date().toISOString()}] ===`);
+    writeLog(`appRoot:      ${appRoot}`);
+    writeLog(`serverScript: ${serverScript}`);
+    writeLog(`logFile:      ${logFile}`);
+
+    // server.js var mı?
+    if (!fs.existsSync(serverScript)) {
+      const msg = `server.js bulunamadı: ${serverScript}\n\nBuild adımını tekrar çalıştırın:\n  npm run electron:build`;
+      writeLog("HATA: " + msg);
+      reject(new Error(msg));
+      return;
+    }
+
+    writeLog("server.js bulundu, fork başlatılıyor…");
     console.log("[main] Next.js sunucu başlatılıyor:", serverScript);
+
+    let serverLog = "";  // hata mesajına eklenecek çıktı
 
     nextServerProcess = utilityProcess.fork(serverScript, [], {
       cwd: appRoot,
@@ -204,24 +227,39 @@ function startNextServer(): Promise<void> {
       stdio: "pipe",
     });
 
-    nextServerProcess.stdout?.on("data", (d: Buffer) =>
-      console.log("[next-server]", d.toString().trimEnd()));
-    nextServerProcess.stderr?.on("data", (d: Buffer) =>
-      console.error("[next-server:err]", d.toString().trimEnd()));
+    nextServerProcess.stdout?.on("data", (d: Buffer) => {
+      const text = d.toString();
+      serverLog += text;
+      writeLog("[stdout] " + text.trimEnd());
+      console.log("[next-server]", text.trimEnd());
+    });
+
+    nextServerProcess.stderr?.on("data", (d: Buffer) => {
+      const text = d.toString();
+      serverLog += text;
+      writeLog("[stderr] " + text.trimEnd());
+      console.error("[next-server:err]", text.trimEnd());
+    });
 
     let resolved = false;
 
     // Süreç, waitForServer'dan önce çıkarsa hata fırlat
     nextServerProcess.once("exit", (code) => {
+      writeLog(`[exit] kod: ${code}`);
       console.error(`[next-server] erken çıkış (kod: ${code})`);
       if (!resolved) {
-        reject(new Error(`Next.js sunucusu başlamadan kapandı (kod: ${code})`));
+        const details = serverLog.trim() || "(çıktı yok)";
+        reject(new Error(
+          `Next.js sunucusu başlamadan kapandı (kod: ${code})\n\n` +
+          `Log dosyası: ${logFile}\n\n` +
+          `--- Sunucu çıktısı ---\n${details}`
+        ));
       }
     });
 
     waitForServer(PROD_PORT, 60_000)
-      .then(() => { resolved = true; resolve(); })
-      .catch((err) => { resolved = true; reject(err); });
+      .then(() => { resolved = true; writeLog("Sunucu hazır."); resolve(); })
+      .catch((err) => { resolved = true; writeLog("Timeout: " + err); reject(err); });
   });
 }
 
