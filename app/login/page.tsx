@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Wifi, Eye, EyeOff, Lock } from "lucide-react";
+import Link from "next/link";
+import { Wifi, Eye, EyeOff, Lock, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -57,6 +58,15 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight">Conectvy</h1>
           <p className="text-sm text-muted-foreground">Oturum açmak için bilgilerinizi girin</p>
         </div>
+
+        {/* DB bağlantı ayarları linki */}
+        <Link
+          href="/db-config"
+          className="flex items-center justify-center gap-2 rounded-lg border border-dashed bg-card px-4 py-3 text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+        >
+          <Database className="h-4 w-4" />
+          Veritabanı bağlantı ayarlarını yapılandır
+        </Link>
 
         {/* Form */}
         <div className="rounded-xl border bg-card p-6 shadow-sm">
