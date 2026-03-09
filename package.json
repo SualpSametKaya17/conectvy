@@ -10,7 +10,8 @@
     "lint": "next lint",
     "electron:compile": "tsc -p electron/tsconfig.json",
     "electron:dev": "npm run electron:compile && concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "npm run electron:compile && cross-env ELECTRON_BUILD=1 next build && electron-builder --win"
+    "electron:clean": "node -e \"const fs=require('fs');try{fs.rmSync('release',{recursive:true,force:true})}catch(e){}\"",
+    "electron:build": "npm run electron:clean && npm run electron:compile && cross-env ELECTRON_BUILD=1 next build && electron-builder --win"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
