@@ -9,7 +9,7 @@
  *             Node.js kurulu olmasa bile çalışır (Electron'un Node.js'i kullanılır).
  */
 
-import { app, BrowserWindow, shell, ipcMain, utilityProcess } from "electron";
+import { app, BrowserWindow, shell, ipcMain, utilityProcess, Menu } from "electron";
 import type { UtilityProcess } from "electron";
 import path from "path";
 import http from "http";
@@ -266,6 +266,7 @@ function startNextServer(): Promise<void> {
 // ─── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.on("ready", async () => {
+  Menu.setApplicationMenu(null);
   mainWindow = createWindow();
 
   // ── Dev modu ────────────────────────────────────────────────────────────────

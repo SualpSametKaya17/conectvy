@@ -30,7 +30,8 @@
     }
   ],
   "win": {
-    "target": "nsis"
+    "target": "nsis",
+    "compression": "store"
   },
   "nsis": {
     "oneClick": false,
