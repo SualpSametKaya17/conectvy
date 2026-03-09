@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Required for Electron: static export not used; we use next start in prod
-  output: process.env.ELECTRON_BUILD === "1" ? "standalone" : undefined,
+  // Electron production build için standalone server gerekli.
+  // "standalone" sadece `next build` çıktısını etkiler, `next dev`'i etkilemez.
+  output: "standalone",
 
   // Disable x-powered-by header
   poweredByHeader: false,
