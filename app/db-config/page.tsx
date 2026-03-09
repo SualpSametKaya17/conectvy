@@ -85,7 +85,7 @@ export default function DbConfigPage() {
     if (!isElectron) return;
     setSaving(true);
     try {
-      await window.electron!.dbConfig.write(config as Record<string, string>);
+      await window.electron!.dbConfig.write(config as unknown as Record<string, string>);
       setSaved(true);
     } finally {
       setSaving(false);
