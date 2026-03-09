@@ -11,7 +11,7 @@
   ],
   "extraResources": [
     {
-      "from": ".next/standalone",
+      "from": ".next/standalone/conectvy",
       "to": "app"
     },
     {
