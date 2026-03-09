@@ -13,6 +13,11 @@
     {
       "from": ".next/standalone/conectvy",
       "to": "nextjs",
+      "filter": ["**/*", "!node_modules/**"]
+    },
+    {
+      "from": ".next/standalone/conectvy/node_modules",
+      "to": "nextjs/node_modules",
       "filter": ["**/*"]
     },
     {
