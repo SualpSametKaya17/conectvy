@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Wifi, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Wifi, Eye, EyeOff, ShieldCheck, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -73,6 +74,15 @@ export default function SetupPage() {
             İlk kurulum — yönetici hesabı oluşturun
           </p>
         </div>
+
+        {/* DB bağlantı ayarları linki */}
+        <Link
+          href="/db-config"
+          className="flex items-center justify-center gap-2 rounded-lg border border-dashed bg-card px-4 py-3 text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+        >
+          <Database className="h-4 w-4" />
+          Veritabanı bağlantı ayarlarını yapılandır
+        </Link>
 
         <div className="rounded-xl border bg-card p-6 shadow-sm space-y-1">
           <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground">

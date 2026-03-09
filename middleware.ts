@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
 
 // Oturum gerektirmeyen yollar
-const PUBLIC_PREFIXES = ["/login", "/setup", "/api/auth"];
+const PUBLIC_PREFIXES = ["/login", "/setup", "/db-config", "/api/auth", "/api/db-config"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

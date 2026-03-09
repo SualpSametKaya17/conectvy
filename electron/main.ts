@@ -211,6 +211,18 @@ function startNextServer(): Promise<void> {
       return;
     }
 
+    // Kaydedilmiş DB bağlantı ayarlarını oku
+    const dbConfigPath = path.join(app.getPath("userData"), "db-config.json");
+    let dbEnvConfig: Record<string, string> = {};
+    try {
+      if (fs.existsSync(dbConfigPath)) {
+        dbEnvConfig = JSON.parse(fs.readFileSync(dbConfigPath, "utf8"));
+        writeLog("DB config dosyasından okundu: " + dbConfigPath);
+      }
+    } catch (e) {
+      writeLog("DB config okunamadı: " + e);
+    }
+
     writeLog("server.js bulundu, fork başlatılıyor…");
     console.log("[main] Next.js sunucu başlatılıyor:", serverScript);
 
@@ -220,6 +232,7 @@ function startNextServer(): Promise<void> {
       cwd: appRoot,
       env: {
         ...process.env,
+        ...dbEnvConfig,
         PORT:      String(PROD_PORT),
         HOSTNAME:  "127.0.0.1",
         NODE_ENV:  "production",
@@ -337,3 +350,24 @@ app.on("activate", () => {
 // ─── IPC köprüleri ─────────────────────────────────────────────────────────────
 ipcMain.handle("app:version", () => app.getVersion());
 ipcMain.handle("app:platform", () => process.platform);
+
+const DB_CONFIG_FILE = () => path.join(app.getPath("userData"), "db-config.json");
+
+ipcMain.handle("db-config:read", () => {
+  const fs = require("fs") as typeof import("fs");
+  try {
+    const p = DB_CONFIG_FILE();
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {}
+  return {};
+});
+
+ipcMain.handle("db-config:write", (_e, config: Record<string, string>) => {
+  const fs = require("fs") as typeof import("fs");
+  fs.writeFileSync(DB_CONFIG_FILE(), JSON.stringify(config, null, 2), "utf8");
+});
+
+ipcMain.on("app:relaunch", () => {
+  app.relaunch();
+  app.exit(0);
+});

@@ -7,5 +7,10 @@ interface Window {
   electron?: {
     getVersion: () => Promise<string>;
     getPlatform: () => Promise<string>;
+    dbConfig: {
+      read: () => Promise<Record<string, string>>;
+      write: (config: Record<string, string>) => Promise<void>;
+    };
+    relaunch: () => void;
   };
 }
