@@ -12,7 +12,8 @@
   "extraResources": [
     {
       "from": ".next/standalone/conectvy",
-      "to": "app"
+      "to": "app",
+      "filter": ["**/*"]
     },
     {
       "from": ".next/static",
