@@ -188,7 +188,7 @@ function waitForServer(port: number, timeout = 60_000): Promise<void> {
 
 function startNextServer(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const appRoot      = path.join(process.resourcesPath, "app");
+    const appRoot      = path.join(process.resourcesPath, "nextjs");
     const serverScript = path.join(appRoot, "server.js");
     const logFile      = path.join(app.getPath("userData"), "server.log");
 

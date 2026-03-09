@@ -12,16 +12,16 @@
   "extraResources": [
     {
       "from": ".next/standalone/conectvy",
-      "to": "app",
+      "to": "nextjs",
       "filter": ["**/*"]
     },
     {
       "from": ".next/static",
-      "to": "app/.next/static"
+      "to": "nextjs/.next/static"
     },
     {
       "from": "public",
-      "to": "app/public"
+      "to": "nextjs/public"
     }
   ],
   "win": {

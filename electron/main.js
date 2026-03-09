@@ -174,7 +174,7 @@ function waitForServer(port, timeout = 60000) {
 }
 function startNextServer() {
     return new Promise((resolve, reject) => {
-        const appRoot = path_1.default.join(process.resourcesPath, "app");
+        const appRoot = path_1.default.join(process.resourcesPath, "nextjs");
         const serverScript = path_1.default.join(appRoot, "server.js");
         const logFile = path_1.default.join(electron_1.app.getPath("userData"), "server.log");
         // Log dosyasını sıfırla
