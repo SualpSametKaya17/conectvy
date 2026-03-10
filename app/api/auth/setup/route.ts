@@ -1,7 +1,9 @@
 import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/utils";
 import { hashPassword } from "@/lib/crypto";
+import { createSessionToken, SESSION_COOKIE, SESSION_DURATION } from "@/lib/session";
 import { z } from "zod";
+import { NextResponse } from "next/server";
 
 async function hasUsers(): Promise<boolean> {
   const pool   = await getPool();
@@ -27,7 +29,7 @@ const SetupBodySchema = z.object({
   password: z.string().min(6).max(255),
 });
 
-/** POST /api/auth/setup — ilk yönetici hesabını oluştur */
+/** POST /api/auth/setup — ilk yönetici hesabını oluştur ve otomatik oturum aç */
 export async function POST(req: Request) {
   try {
     const exists = await hasUsers();
@@ -41,16 +43,28 @@ export async function POST(req: Request) {
     const hash = hashPassword(password);
 
     const pool = await getPool();
-    await pool.request()
+    const result = await pool.request()
       .input("username",      sql.NVarChar, username)
       .input("email",         sql.NVarChar, email || null)
       .input("password_hash", sql.NVarChar, hash)
       .query(`
         INSERT INTO users (username, email, password_hash, is_active)
+        OUTPUT INSERTED.id
         VALUES (@username, @email, @password_hash, 1)
       `);
 
-    return apiSuccess({ created: true }, 201);
+    const userId = result.recordset[0]?.id as number;
+
+    // Otomatik oturum aç — 2FA kurulum adımı için
+    const token = await createSessionToken(userId, username);
+    const res   = NextResponse.json({ success: true, data: { created: true } }, { status: 201 });
+    res.cookies.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      path:     "/",
+      maxAge:   SESSION_DURATION / 1000,
+    });
+    return res;
   } catch (err) {
     console.error("[setup POST]", err);
     return apiError("Veritabanı bağlantısı kurulamadı. Lütfen bağlantı ayarlarını kontrol edin.", 503);
