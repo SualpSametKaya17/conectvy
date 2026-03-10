@@ -11,9 +11,14 @@ async function hasUsers(): Promise<boolean> {
 
 /** GET /api/auth/setup — kurulum yapılabilir mi? */
 export async function GET() {
-  const exists = await hasUsers();
-  if (exists) return apiError("Kurulum zaten tamamlanmış", 403);
-  return apiSuccess({ canSetup: true });
+  try {
+    const exists = await hasUsers();
+    if (exists) return apiError("Kurulum zaten tamamlanmış", 403);
+    return apiSuccess({ canSetup: true });
+  } catch (err) {
+    console.error("[setup GET]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı. Lütfen bağlantı ayarlarını kontrol edin.", 503);
+  }
 }
 
 const SetupBodySchema = z.object({
@@ -24,25 +29,30 @@ const SetupBodySchema = z.object({
 
 /** POST /api/auth/setup — ilk yönetici hesabını oluştur */
 export async function POST(req: Request) {
-  const exists = await hasUsers();
-  if (exists) return apiError("Kurulum zaten tamamlanmış", 403);
+  try {
+    const exists = await hasUsers();
+    if (exists) return apiError("Kurulum zaten tamamlanmış", 403);
 
-  const body   = await req.json();
-  const parsed = SetupBodySchema.safeParse(body);
-  if (!parsed.success) return apiError(parsed.error.errors[0]?.message ?? "Geçersiz veri", 422);
+    const body   = await req.json();
+    const parsed = SetupBodySchema.safeParse(body);
+    if (!parsed.success) return apiError(parsed.error.errors[0]?.message ?? "Geçersiz veri", 422);
 
-  const { username, email, password } = parsed.data;
-  const hash = hashPassword(password);
+    const { username, email, password } = parsed.data;
+    const hash = hashPassword(password);
 
-  const pool = await getPool();
-  await pool.request()
-    .input("username",      sql.NVarChar, username)
-    .input("email",         sql.NVarChar, email || null)
-    .input("password_hash", sql.NVarChar, hash)
-    .query(`
-      INSERT INTO users (username, email, password_hash, is_active)
-      VALUES (@username, @email, @password_hash, 1)
-    `);
+    const pool = await getPool();
+    await pool.request()
+      .input("username",      sql.NVarChar, username)
+      .input("email",         sql.NVarChar, email || null)
+      .input("password_hash", sql.NVarChar, hash)
+      .query(`
+        INSERT INTO users (username, email, password_hash, is_active)
+        VALUES (@username, @email, @password_hash, 1)
+      `);
 
-  return apiSuccess({ created: true }, 201);
+    return apiSuccess({ created: true }, 201);
+  } catch (err) {
+    console.error("[setup POST]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı. Lütfen bağlantı ayarlarını kontrol edin.", 503);
+  }
 }

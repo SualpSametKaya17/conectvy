@@ -29,33 +29,38 @@ export async function POST(req: Request) {
   const { code } = await req.json();
   if (!code || typeof code !== "string") return apiError("Kod zorunludur", 400);
 
-  // Kullanıcının TOTP secret'ını çek
-  const pool = await getPool();
-  const result = await pool.request()
-    .input("userId", sql.Int, payload.userId)
-    .query("SELECT totp_secret, totp_enabled FROM users WHERE id = @userId AND is_active = 1");
+  try {
+    // Kullanıcının TOTP secret'ını çek
+    const pool = await getPool();
+    const result = await pool.request()
+      .input("userId", sql.Int, payload.userId)
+      .query("SELECT totp_secret, totp_enabled FROM users WHERE id = @userId AND is_active = 1");
 
-  const user = result.recordset[0];
-  if (!user || !user.totp_enabled || !user.totp_secret) {
-    return apiError("2FA ayarı bulunamadı", 401);
+    const user = result.recordset[0];
+    if (!user || !user.totp_enabled || !user.totp_secret) {
+      return apiError("2FA ayarı bulunamadı", 401);
+    }
+
+    const secret = decrypt(user.totp_secret);
+    const valid  = verifyTotpToken(secret, code);
+    if (!valid) return apiError("Geçersiz kod, tekrar deneyin", 401);
+
+    // Tam oturum token'ı oluştur
+    const sessionToken = await createSessionToken(payload.userId, payload.username);
+    const res = NextResponse.json({ success: true, data: { username: payload.username } });
+
+    res.cookies.set(SESSION_COOKIE, sessionToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path:     "/",
+      maxAge:   SESSION_DURATION / 1000,
+    });
+    // Pending cookie'yi temizle
+    res.cookies.delete(PENDING_COOKIE);
+
+    return res;
+  } catch (err) {
+    console.error("[2fa verify]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı", 503);
   }
-
-  const secret = decrypt(user.totp_secret);
-  const valid  = verifyTotpToken(secret, code);
-  if (!valid) return apiError("Geçersiz kod, tekrar deneyin", 401);
-
-  // Tam oturum token'ı oluştur
-  const sessionToken = await createSessionToken(payload.userId, payload.username);
-  const res = NextResponse.json({ success: true, data: { username: payload.username } });
-
-  res.cookies.set(SESSION_COOKIE, sessionToken, {
-    httpOnly: true,
-    sameSite: "lax",
-    path:     "/",
-    maxAge:   SESSION_DURATION / 1000,
-  });
-  // Pending cookie'yi temizle
-  res.cookies.delete(PENDING_COOKIE);
-
-  return res;
 }

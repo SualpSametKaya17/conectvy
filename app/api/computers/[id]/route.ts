@@ -9,33 +9,38 @@ function getIdParam(params: { id: string }): number | null {
 
 /** GET /api/computers/:id */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const id = getIdParam(await params);
-  if (!id) return apiError("Geçerli bir ID giriniz", 400);
+  try {
+    const id = getIdParam(await params);
+    if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
-  const pool   = await getPool();
-  const result = await pool.request()
-    .input("id", sql.Int, id)
-    .query(`
-      SELECT co.id, co.device_type AS deviceType,
-             co.company_id AS companyId, comp.name AS companyName,
-             co.name, co.description, co.notes, co.is_active AS isActive,
-             co.created_at AS createdAt, co.updated_at AS updatedAt,
-             (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1)                           AS connectionCount,
-             (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1 AND cn.tool = 'RUSTDESK') AS rustdeskCount,
-             (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1 AND cn.tool = 'ANYDESK')  AS anyDeskCount
-      FROM computers co
-      JOIN companies comp ON comp.id = co.company_id
-      WHERE co.id = @id AND co.is_active = 1
-    `);
+    const pool   = await getPool();
+    const result = await pool.request()
+      .input("id", sql.Int, id)
+      .query(`
+        SELECT co.id, co.device_type AS deviceType,
+               co.company_id AS companyId, comp.name AS companyName,
+               co.name, co.description, co.notes, co.is_active AS isActive,
+               co.created_at AS createdAt, co.updated_at AS updatedAt,
+               (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1)                           AS connectionCount,
+               (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1 AND cn.tool = 'RUSTDESK') AS rustdeskCount,
+               (SELECT COUNT(*) FROM connections cn WHERE cn.computer_id = co.id AND cn.is_active = 1 AND cn.tool = 'ANYDESK')  AS anyDeskCount
+        FROM computers co
+        JOIN companies comp ON comp.id = co.company_id
+        WHERE co.id = @id AND co.is_active = 1
+      `);
 
-  const row = result.recordset[0];
-  if (!row) return apiError("Cihaz bulunamadı", 404);
+    const row = result.recordset[0];
+    if (!row) return apiError("Cihaz bulunamadı", 404);
 
-  return apiSuccess({
-    ...row,
-    company: { id: row.companyId, name: row.companyName },
-    _count:  { connections: row.connectionCount, rustdesk: row.rustdeskCount, anydesk: row.anyDeskCount },
-  });
+    return apiSuccess({
+      ...row,
+      company: { id: row.companyId, name: row.companyName },
+      _count:  { connections: row.connectionCount, rustdesk: row.rustdeskCount, anydesk: row.anyDeskCount },
+    });
+  } catch (err) {
+    console.error("[computers GET/:id]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı", 503);
+  }
 }
 
 /** PATCH /api/computers/:id */
@@ -86,14 +91,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 /** DELETE /api/computers/:id  (soft delete) */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const id = getIdParam(await params);
-  if (!id) return apiError("Geçerli bir ID giriniz", 400);
+  try {
+    const id = getIdParam(await params);
+    if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
-  const pool   = await getPool();
-  const result = await pool.request()
-    .input("id", sql.Int, id)
-    .query("UPDATE computers SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
+    const pool   = await getPool();
+    const result = await pool.request()
+      .input("id", sql.Int, id)
+      .query("UPDATE computers SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
 
-  if (!result.recordset[0]?.affected) return apiError("Cihaz bulunamadı", 404);
-  return apiSuccess({ deleted: true });
+    if (!result.recordset[0]?.affected) return apiError("Cihaz bulunamadı", 404);
+    return apiSuccess({ deleted: true });
+  } catch (err) {
+    console.error("[computers DELETE/:id]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı", 503);
+  }
 }

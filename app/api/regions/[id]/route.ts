@@ -9,30 +9,35 @@ function getIdParam(params: { id: string }): number | null {
 
 /** GET /api/regions/:id */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const id = getIdParam(await params);
-  if (!id) return apiError("Geçerli bir ID giriniz", 400);
+  try {
+    const id = getIdParam(await params);
+    if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
-  const pool   = await getPool();
-  const result = await pool.request()
-    .input("id", sql.Int, id)
-    .query(`
-      SELECT r.id, r.name, r.description, r.is_active AS isActive,
-             r.company_id AS companyId, co.name AS companyName,
-             r.created_at AS createdAt, r.updated_at AS updatedAt,
-             (SELECT COUNT(*) FROM connections c WHERE c.region_id = r.id) AS connectionCount
-      FROM regions r
-      LEFT JOIN companies co ON co.id = r.company_id
-      WHERE r.id = @id
-    `);
+    const pool   = await getPool();
+    const result = await pool.request()
+      .input("id", sql.Int, id)
+      .query(`
+        SELECT r.id, r.name, r.description, r.is_active AS isActive,
+               r.company_id AS companyId, co.name AS companyName,
+               r.created_at AS createdAt, r.updated_at AS updatedAt,
+               (SELECT COUNT(*) FROM connections c WHERE c.region_id = r.id) AS connectionCount
+        FROM regions r
+        LEFT JOIN companies co ON co.id = r.company_id
+        WHERE r.id = @id
+      `);
 
-  const row = result.recordset[0];
-  if (!row) return apiError("Bölge bulunamadı", 404);
+    const row = result.recordset[0];
+    if (!row) return apiError("Bölge bulunamadı", 404);
 
-  return apiSuccess({
-    ...row,
-    company: row.companyId ? { id: row.companyId, name: row.companyName } : null,
-    _count:  { connections: row.connectionCount },
-  });
+    return apiSuccess({
+      ...row,
+      company: row.companyId ? { id: row.companyId, name: row.companyName } : null,
+      _count:  { connections: row.connectionCount },
+    });
+  } catch (err) {
+    console.error("[regions GET/:id]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı", 503);
+  }
 }
 
 /** PATCH /api/regions/:id */
@@ -92,14 +97,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 /** DELETE /api/regions/:id  (soft delete) */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const id = getIdParam(await params);
-  if (!id) return apiError("Geçerli bir ID giriniz", 400);
+  try {
+    const id = getIdParam(await params);
+    if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
-  const pool   = await getPool();
-  const result = await pool.request()
-    .input("id", sql.Int, id)
-    .query("UPDATE regions SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
+    const pool   = await getPool();
+    const result = await pool.request()
+      .input("id", sql.Int, id)
+      .query("UPDATE regions SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
 
-  if (!result.recordset[0]?.affected) return apiError("Bölge bulunamadı", 404);
-  return apiSuccess({ deleted: true });
+    if (!result.recordset[0]?.affected) return apiError("Bölge bulunamadı", 404);
+    return apiSuccess({ deleted: true });
+  } catch (err) {
+    console.error("[regions DELETE/:id]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı", 503);
+  }
 }

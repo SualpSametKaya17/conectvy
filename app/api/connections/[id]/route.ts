@@ -9,39 +9,44 @@ function getIdParam(params: { id: string }): number | null {
 
 /** GET /api/connections/:id  — şifreyi de döner */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const id = getIdParam(await params);
-  if (!id) return apiError("Geçerli bir ID giriniz", 400);
+  try {
+    const id = getIdParam(await params);
+    if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
-  const pool   = await getPool();
-  const result = await pool.request()
-    .input("id", sql.Int, id)
-    .query(`
-      SELECT
-        c.id, c.name, c.tool,
-        c.remote_id   AS remoteId,
-        c.password,
-        c.company_id  AS companyId,  co.name  AS companyName,
-        c.region_id   AS regionId,   r.name   AS regionName,
-        c.computer_id AS computerId, cmp.name AS computerName,
-        c.notes, c.is_active AS isActive,
-        c.last_connected_at AS lastConnectedAt,
-        c.created_at AS createdAt, c.updated_at AS updatedAt
-      FROM connections c
-      LEFT JOIN companies co  ON co.id  = c.company_id
-      LEFT JOIN regions   r   ON r.id   = c.region_id
-      LEFT JOIN computers cmp ON cmp.id = c.computer_id
-      WHERE c.id = @id AND c.is_active = 1
-    `);
+    const pool   = await getPool();
+    const result = await pool.request()
+      .input("id", sql.Int, id)
+      .query(`
+        SELECT
+          c.id, c.name, c.tool,
+          c.remote_id   AS remoteId,
+          c.password,
+          c.company_id  AS companyId,  co.name  AS companyName,
+          c.region_id   AS regionId,   r.name   AS regionName,
+          c.computer_id AS computerId, cmp.name AS computerName,
+          c.notes, c.is_active AS isActive,
+          c.last_connected_at AS lastConnectedAt,
+          c.created_at AS createdAt, c.updated_at AS updatedAt
+        FROM connections c
+        LEFT JOIN companies co  ON co.id  = c.company_id
+        LEFT JOIN regions   r   ON r.id   = c.region_id
+        LEFT JOIN computers cmp ON cmp.id = c.computer_id
+        WHERE c.id = @id AND c.is_active = 1
+      `);
 
-  const row = result.recordset[0];
-  if (!row) return apiError("Bağlantı bulunamadı", 404);
+    const row = result.recordset[0];
+    if (!row) return apiError("Bağlantı bulunamadı", 404);
 
-  return apiSuccess({
-    ...row,
-    company:  row.companyId  ? { id: row.companyId,  name: row.companyName  } : null,
-    region:   row.regionId   ? { id: row.regionId,   name: row.regionName   } : null,
-    computer: row.computerId ? { id: row.computerId, name: row.computerName } : null,
-  });
+    return apiSuccess({
+      ...row,
+      company:  row.companyId  ? { id: row.companyId,  name: row.companyName  } : null,
+      region:   row.regionId   ? { id: row.regionId,   name: row.regionName   } : null,
+      computer: row.computerId ? { id: row.computerId, name: row.computerName } : null,
+    });
+  } catch (err) {
+    console.error("[connections GET/:id]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı", 503);
+  }
 }
 
 /** PATCH /api/connections/:id */
@@ -105,14 +110,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 /** DELETE /api/connections/:id  (soft delete) */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const id = getIdParam(await params);
-  if (!id) return apiError("Geçerli bir ID giriniz", 400);
+  try {
+    const id = getIdParam(await params);
+    if (!id) return apiError("Geçerli bir ID giriniz", 400);
 
-  const pool   = await getPool();
-  const result = await pool.request()
-    .input("id", sql.Int, id)
-    .query("UPDATE connections SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
+    const pool   = await getPool();
+    const result = await pool.request()
+      .input("id", sql.Int, id)
+      .query("UPDATE connections SET is_active = 0 WHERE id = @id; SELECT @@ROWCOUNT AS affected");
 
-  if (!result.recordset[0]?.affected) return apiError("Bağlantı bulunamadı", 404);
-  return apiSuccess({ deleted: true });
+    if (!result.recordset[0]?.affected) return apiError("Bağlantı bulunamadı", 404);
+    return apiSuccess({ deleted: true });
+  } catch (err) {
+    console.error("[connections DELETE/:id]", err);
+    return apiError("Veritabanı bağlantısı kurulamadı", 503);
+  }
 }
