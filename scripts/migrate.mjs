@@ -75,6 +75,18 @@ const migrations = [
            ALTER TABLE users ADD login_count INT NOT NULL DEFAULT 0;`,
   },
   {
+    name: "users.totp_enabled",
+    sql: `IF OBJECT_ID('users','U') IS NOT NULL AND
+             NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'totp_enabled')
+           ALTER TABLE users ADD totp_enabled BIT NOT NULL DEFAULT 0;`,
+  },
+  {
+    name: "users.totp_secret",
+    sql: `IF OBJECT_ID('users','U') IS NOT NULL AND
+             NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'totp_secret')
+           ALTER TABLE users ADD totp_secret NVARCHAR(255) NULL;`,
+  },
+  {
     name: "passwords table",
     sql: `IF OBJECT_ID('passwords','U') IS NULL
            CREATE TABLE passwords (

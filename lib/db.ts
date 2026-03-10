@@ -85,6 +85,26 @@ async function getPool(): Promise<sql.ConnectionPool> {
 
   try {
     await pool.request().query(`
+      IF OBJECT_ID('users','U') IS NOT NULL AND
+         NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'totp_enabled')
+        ALTER TABLE users ADD totp_enabled BIT NOT NULL DEFAULT 0;
+    `);
+  } catch {
+    // Hata olursa sessizce geç
+  }
+
+  try {
+    await pool.request().query(`
+      IF OBJECT_ID('users','U') IS NOT NULL AND
+         NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'totp_secret')
+        ALTER TABLE users ADD totp_secret NVARCHAR(255) NULL;
+    `);
+  } catch {
+    // Hata olursa sessizce geç
+  }
+
+  try {
+    await pool.request().query(`
       IF OBJECT_ID('passwords','U') IS NULL
         CREATE TABLE passwords (
           id         INT IDENTITY(1,1) PRIMARY KEY,
