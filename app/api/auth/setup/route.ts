@@ -19,7 +19,7 @@ export async function GET() {
     return apiSuccess({ canSetup: true });
   } catch (err) {
     console.error("[setup GET]", err);
-    return apiError("Veritabanı bağlantısı kurulamadı. Lütfen bağlantı ayarlarını kontrol edin.", 503);
+    return apiError(`Sunucu hatası: ${err instanceof Error ? err.message : String(err)}`, 503);
   }
 }
 
@@ -67,6 +67,6 @@ export async function POST(req: Request) {
     return res;
   } catch (err) {
     console.error("[setup POST]", err);
-    return apiError("Veritabanı bağlantısı kurulamadı. Lütfen bağlantı ayarlarını kontrol edin.", 503);
+    return apiError(`Sunucu hatası: ${err instanceof Error ? err.message : String(err)}`, 503);
   }
 }

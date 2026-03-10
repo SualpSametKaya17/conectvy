@@ -44,10 +44,14 @@ export default function SetupPage() {
   const [copied,    setCopied]    = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/setup").then((r) => r.json()).then((j) => {
-      if (j.data?.canSetup) setAllowed(true);
-      else router.replace("/login");
-    });
+    fetch("/api/auth/setup")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.canSetup) setAllowed(true);
+        else if (j.error)     setError(j.error);
+        else                  router.replace("/login");
+      })
+      .catch(() => setError("Sunucuya ulaşılamadı. Veritabanı bağlantı ayarlarını kontrol edin."));
   }, [router]);
 
   const form = useForm<SetupInput>({
@@ -121,7 +125,31 @@ export default function SetupPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  if (allowed === null) return null;
+  if (allowed === null) return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm space-y-4 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 mx-auto">
+          <Wifi className="h-6 w-6 text-primary" />
+        </div>
+        {error ? (
+          <>
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive text-left">
+              {error}
+            </div>
+            <Link
+              href="/db-config"
+              className="flex items-center justify-center gap-2 rounded-lg border border-dashed bg-card px-4 py-3 text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+            >
+              <Database className="h-4 w-4" />
+              Veritabanı bağlantı ayarlarını yapılandır
+            </Link>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">Yükleniyor...</p>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
