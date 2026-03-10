@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +23,14 @@ export default function LoginPage() {
   const router = useRouter();
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError]     = useState("");
+
+  // Kullanıcı yoksa otomatik olarak setup sayfasına yönlendir
+  useEffect(() => {
+    fetch("/api/auth/setup")
+      .then((r) => r.json())
+      .then((j) => { if (j.data?.canSetup) router.replace("/setup"); })
+      .catch(() => {/* bağlantı yoksa login sayfasında kal */});
+  }, [router]);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(LoginSchema),
@@ -54,12 +62,16 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
 
-        {/* Logo */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+        {/* Logo — çift tıklayınca kullanıcı oluşturma sayfasına git */}
+        <div
+          className="flex flex-col items-center gap-2 select-none"
+          onDoubleClick={() => router.push("/setup")}
+          title="Kullanıcı oluşturmak için çift tıklayın"
+        >
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 cursor-pointer hover:bg-primary/20 transition-colors">
             <Wifi className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Conectvy</h1>
+          <h1 className="text-2xl font-bold tracking-tight cursor-pointer">Conectvy</h1>
           <p className="text-sm text-muted-foreground">Oturum açmak için bilgilerinizi girin</p>
         </div>
 
