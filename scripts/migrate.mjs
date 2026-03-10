@@ -63,6 +63,13 @@ const migrations = [
            ALTER TABLE companies ADD maintenance_start_date DATE NULL, maintenance_end_date DATE NULL;`,
   },
   {
+    name: "users.email nullable",
+    sql: `IF OBJECT_ID('users','U') IS NOT NULL AND
+             EXISTS (SELECT 1 FROM sys.columns
+                     WHERE object_id = OBJECT_ID('users') AND name = 'email' AND is_nullable = 0)
+           ALTER TABLE users ALTER COLUMN email NVARCHAR(255) NULL;`,
+  },
+  {
     name: "computers.notes",
     sql: `IF OBJECT_ID('computers','U') IS NOT NULL AND
              NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('computers') AND name = 'notes')

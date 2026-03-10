@@ -76,6 +76,17 @@ async function getPool(): Promise<sql.ConnectionPool> {
   try {
     await pool.request().query(`
       IF OBJECT_ID('users','U') IS NOT NULL AND
+         EXISTS (SELECT 1 FROM sys.columns
+                 WHERE object_id = OBJECT_ID('users') AND name = 'email' AND is_nullable = 0)
+        ALTER TABLE users ALTER COLUMN email NVARCHAR(255) NULL;
+    `);
+  } catch {
+    // Hata olursa sessizce geç
+  }
+
+  try {
+    await pool.request().query(`
+      IF OBJECT_ID('users','U') IS NOT NULL AND
          NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'login_count')
         ALTER TABLE users ADD login_count INT NOT NULL DEFAULT 0;
     `);
