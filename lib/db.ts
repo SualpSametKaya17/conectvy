@@ -75,6 +75,16 @@ async function getPool(): Promise<sql.ConnectionPool> {
 
   try {
     await pool.request().query(`
+      IF OBJECT_ID('users','U') IS NOT NULL AND
+         NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'login_count')
+        ALTER TABLE users ADD login_count INT NOT NULL DEFAULT 0;
+    `);
+  } catch {
+    // Hata olursa sessizce geç
+  }
+
+  try {
+    await pool.request().query(`
       IF OBJECT_ID('passwords','U') IS NULL
         CREATE TABLE passwords (
           id         INT IDENTITY(1,1) PRIMARY KEY,

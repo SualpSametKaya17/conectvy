@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const result = await pool.request()
       .input("username", sql.NVarChar, username)
       .query(`
-        SELECT id, username, password_hash, is_active, totp_enabled
+        SELECT id, username, password_hash, is_active, totp_enabled, login_count
         FROM users
         WHERE username = @username
       `);
@@ -30,8 +30,16 @@ export async function POST(req: Request) {
     const valid = verifyPassword(password, user.password_hash);
     if (!valid) return apiError("Kullanıcı adı veya şifre hatalı", 401);
 
-    // 2FA etkinse → geçici pending token ver ve 2FA sayfasına yönlendir
-    if (user.totp_enabled) {
+    const loginCount: number = user.login_count ?? 0;
+    const isFirstLogin = loginCount === 0;
+
+    // login_count artır
+    await pool.request()
+      .input("id", sql.Int, user.id)
+      .query("UPDATE users SET login_count = login_count + 1 WHERE id = @id");
+
+    // 2FA etkinse ve ilk giriş değilse → 2FA doğrulama sayfasına yönlendir
+    if (user.totp_enabled && !isFirstLogin) {
       const pendingToken = await createPendingToken(user.id, user.username);
       const res = NextResponse.json({ success: true, data: { requireTotp: true } });
       res.cookies.set(PENDING_COOKIE, pendingToken, {
@@ -43,7 +51,7 @@ export async function POST(req: Request) {
       return res;
     }
 
-    // 2FA kapalı → direkt oturum aç
+    // İlk giriş veya 2FA kapalı → direkt oturum aç
     const token = await createSessionToken(user.id, user.username);
     const res = NextResponse.json({ success: true, data: { username: user.username } });
     res.cookies.set(SESSION_COOKIE, token, {
