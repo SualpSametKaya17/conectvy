@@ -75,7 +75,8 @@ export async function POST(req: Request) {
     });
     return res;
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("[login]", err);
-    return apiError("Veritabanı bağlantısı kurulamadı. Lütfen bağlantı ayarlarını kontrol edin.", 503);
+    return apiError(`Sunucu hatası: ${msg}`, 503);
   }
 }
