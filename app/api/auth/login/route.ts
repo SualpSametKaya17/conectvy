@@ -1,7 +1,11 @@
 import { getPool, sql } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/utils";
 import { verifyPassword } from "@/lib/crypto";
-import { createSessionToken, SESSION_COOKIE, SESSION_DURATION } from "@/lib/session";
+import {
+  createSessionToken, createPendingToken,
+  SESSION_COOKIE, SESSION_DURATION,
+  PENDING_COOKIE, PENDING_DURATION,
+} from "@/lib/session";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -13,7 +17,7 @@ export async function POST(req: Request) {
   const result = await pool.request()
     .input("username", sql.NVarChar, username)
     .query(`
-      SELECT id, username, password_hash, is_active
+      SELECT id, username, password_hash, is_active, totp_enabled
       FROM users
       WHERE username = @username
     `);
@@ -25,8 +29,21 @@ export async function POST(req: Request) {
   const valid = verifyPassword(password, user.password_hash);
   if (!valid) return apiError("Kullanıcı adı veya şifre hatalı", 401);
 
-  const token = await createSessionToken(user.id, user.username);
+  // 2FA etkinse → geçici pending token ver ve 2FA sayfasına yönlendir
+  if (user.totp_enabled) {
+    const pendingToken = await createPendingToken(user.id, user.username);
+    const res = NextResponse.json({ success: true, data: { requireTotp: true } });
+    res.cookies.set(PENDING_COOKIE, pendingToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path:     "/",
+      maxAge:   PENDING_DURATION / 1000,
+    });
+    return res;
+  }
 
+  // 2FA kapalı → direkt oturum aç
+  const token = await createSessionToken(user.id, user.username);
   const res = NextResponse.json({ success: true, data: { username: user.username } });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -34,6 +51,5 @@ export async function POST(req: Request) {
     path:     "/",
     maxAge:   SESSION_DURATION / 1000,
   });
-
   return res;
 }

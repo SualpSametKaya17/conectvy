@@ -5,11 +5,13 @@
  *
  * - DB bağlantı durumu (health check) gösterilir.
  * - Bakım desteği uyarı eşikleri ayarlanır (localStorage'da saklanır).
+ * - 2FA (Google Authenticator) yönetimi.
  * - Uygulama bilgileri gösterilir.
  */
 
 import { useState, useEffect } from "react";
-import { RefreshCw, CheckCircle2, XCircle, Database, Info, Bell } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Database, Info, Bell, ShieldCheck, ShieldOff, QrCode } from "lucide-react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,9 +44,21 @@ function maskDbUrl(url: string | undefined): string {
   }
 }
 
+interface TotpSetupData {
+  secret:     string;
+  qrDataUrl:  string;
+  isEnabled:  boolean;
+}
+
 export default function SettingsPage() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [checking, setChecking] = useState(false);
+
+  // 2FA state
+  const [totpEnabled, setTotpEnabled] = useState<boolean | null>(null);
+  const [totpSetup, setTotpSetup]     = useState<TotpSetupData | null>(null);
+  const [totpCode, setTotpCode]       = useState("");
+  const [totpLoading, setTotpLoading] = useState(false);
 
   // Bakım uyarı eşiği ayarları
   const [maintenanceSettings, setMaintenanceSettings] = useState<MaintenanceSettings>(
@@ -82,6 +96,65 @@ export default function SettingsPage() {
   }
 
   useEffect(() => { checkHealth(); }, []);
+
+  async function loadTotpStatus() {
+    try {
+      const res  = await fetch("/api/auth/2fa/setup");
+      const json = await res.json();
+      if (res.ok) setTotpEnabled(json.data.isEnabled);
+    } catch { /* sessiz hata */ }
+  }
+  useEffect(() => { loadTotpStatus(); }, []);
+
+  async function startTotpSetup() {
+    setTotpLoading(true);
+    try {
+      const res  = await fetch("/api/auth/2fa/setup");
+      const json = await res.json();
+      if (res.ok) setTotpSetup(json.data);
+      else toast.error(json.error ?? "QR kodu alınamadı");
+    } catch { toast.error("Sunucuya ulaşılamadı"); }
+    finally { setTotpLoading(false); }
+  }
+
+  async function enableTotp() {
+    if (!totpSetup) return;
+    if (totpCode.replace(/\s/g, "").length < 6) { toast.error("6 haneli kodu girin"); return; }
+    setTotpLoading(true);
+    try {
+      const res  = await fetch("/api/auth/2fa/setup", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ secret: totpSetup.secret, code: totpCode }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Etkinleştirme başarısız"); return; }
+      toast.success("2FA etkinleştirildi");
+      setTotpEnabled(true);
+      setTotpSetup(null);
+      setTotpCode("");
+    } catch { toast.error("Sunucuya ulaşılamadı"); }
+    finally { setTotpLoading(false); }
+  }
+
+  async function disableTotp() {
+    if (totpCode.replace(/\s/g, "").length < 6) { toast.error("Devre dışı bırakmak için kodu girin"); return; }
+    setTotpLoading(true);
+    try {
+      const res  = await fetch("/api/auth/2fa/setup", {
+        method:  "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ code: totpCode }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error ?? "Devre dışı bırakma başarısız"); return; }
+      toast.success("2FA devre dışı bırakıldı");
+      setTotpEnabled(false);
+      setTotpSetup(null);
+      setTotpCode("");
+    } catch { toast.error("Sunucuya ulaşılamadı"); }
+    finally { setTotpLoading(false); }
+  }
 
   function handleSaveMaintenanceSettings() {
     const warn = parseInt(warnDaysInput, 10);
@@ -175,6 +248,100 @@ export default function SettingsPage() {
               </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* İki Adımlı Doğrulama (2FA) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-base">İki Adımlı Doğrulama (2FA)</CardTitle>
+            {totpEnabled !== null && (
+              <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${totpEnabled ? "bg-green-100 text-green-800" : "bg-muted text-muted-foreground"}`}>
+                {totpEnabled ? "Etkin" : "Kapalı"}
+              </span>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Google Authenticator uygulamasıyla hesabınıza ekstra güvenlik katmanı ekleyin.
+          </p>
+
+          {/* 2FA Kapalı: Etkinleştir butonu */}
+          {!totpEnabled && !totpSetup && (
+            <Button onClick={startTotpSetup} disabled={totpLoading} variant="outline">
+              <QrCode className="mr-2 h-4 w-4" />
+              {totpLoading ? "Yükleniyor..." : "2FA'yı Etkinleştir"}
+            </Button>
+          )}
+
+          {/* QR Kodu göster ve kod doğrula */}
+          {!totpEnabled && totpSetup && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-3">
+                <p className="text-sm font-medium">Google Authenticator ile QR kodu tarayın:</p>
+                <div className="flex justify-center">
+                  <Image src={totpSetup.qrDataUrl} alt="2FA QR Kodu" width={180} height={180} />
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  QR kod çalışmazsa bu kodu manuel girin:
+                </p>
+                <code className="block text-center text-xs bg-muted px-3 py-1 rounded font-mono break-all">
+                  {totpSetup.secret}
+                </code>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Uygulamadaki kodu girerek doğrulayın</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000 000"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/[^0-9 ]/g, "").slice(0, 7))}
+                  className="w-full text-center text-xl tracking-widest font-mono h-12 rounded-md border bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={enableTotp} disabled={totpLoading}>
+                  {totpLoading ? "Doğrulanıyor..." : "Etkinleştir"}
+                </Button>
+                <Button variant="outline" onClick={() => { setTotpSetup(null); setTotpCode(""); }}>
+                  İptal
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* 2FA Etkin: Devre dışı bırak */}
+          {totpEnabled && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900 px-4 py-3">
+                <ShieldCheck className="h-4 w-4 text-green-600 shrink-0" />
+                <p className="text-sm text-green-700 dark:text-green-400">
+                  2FA aktif — hesabınız iki adımlı doğrulama ile korunuyor.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-muted-foreground">
+                  Devre dışı bırakmak için mevcut kodunuzu girin:
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000 000"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/[^0-9 ]/g, "").slice(0, 7))}
+                  className="w-full text-center text-xl tracking-widest font-mono h-12 rounded-md border bg-background px-3 focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <Button variant="destructive" onClick={disableTotp} disabled={totpLoading}>
+                <ShieldOff className="mr-2 h-4 w-4" />
+                {totpLoading ? "İşleniyor..." : "2FA'yı Devre Dışı Bırak"}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

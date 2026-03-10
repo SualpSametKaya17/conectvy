@@ -3,13 +3,18 @@
  * Next.js middleware + API route'larında çalışır.
  */
 
-export const SESSION_COOKIE  = "conectvy_session";
+export const SESSION_COOKIE   = "conectvy_session";
 export const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 saat
 
+// Şifre doğrulandı ama TOTP henüz girilmedi — geçici 5 dakikalık token
+export const PENDING_COOKIE   = "conectvy_pending";
+export const PENDING_DURATION = 5 * 60 * 1000; // 5 dakika
+
 export interface SessionPayload {
-  userId:   number;
-  username: string;
-  exp:      number;
+  userId:      number;
+  username:    string;
+  exp:         number;
+  pendingTotp?: boolean; // true → sadece /login/2fa erişebilir
 }
 
 // ─── Yardımcı ─────────────────────────────────────────────────────────────────
@@ -54,6 +59,14 @@ async function getKey(): Promise<CryptoKey> {
 }
 
 // ─── Token oluştur ────────────────────────────────────────────────────────────
+export async function createPendingToken(userId: number, username: string): Promise<string> {
+  const payload: SessionPayload = { userId, username, exp: Date.now() + PENDING_DURATION, pendingTotp: true };
+  const payloadB64 = b64uEncode(JSON.stringify(payload));
+  const key = await getKey();
+  const sig  = await crypto.subtle.sign("HMAC", key, enc.encode(payloadB64));
+  return `${payloadB64}.${toHex(sig)}`;
+}
+
 export async function createSessionToken(userId: number, username: string): Promise<string> {
   const payload: SessionPayload = { userId, username, exp: Date.now() + SESSION_DURATION };
   const payloadB64 = b64uEncode(JSON.stringify(payload));

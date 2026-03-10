@@ -39,7 +39,11 @@ export default function LoginPage() {
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? "Giriş başarısız"); return; }
-      router.push("/dashboard");
+      if (json.data?.requireTotp) {
+        router.push("/login/2fa");
+      } else {
+        router.push("/dashboard");
+      }
       router.refresh();
     } catch {
       setError("Sunucuya ulaşılamadı");
