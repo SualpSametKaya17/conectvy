@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -282,13 +281,8 @@ export default function SetupPage() {
             {/* QR */}
             <div className="flex justify-center">
               <div className="rounded-lg border p-2 bg-white">
-                <Image
-                  src={totp.qrDataUrl}
-                  alt="2FA QR Kodu"
-                  width={180}
-                  height={180}
-                  unoptimized
-                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={totp.qrDataUrl} alt="2FA QR Kodu" width={180} height={180} />
               </div>
             </div>
 
